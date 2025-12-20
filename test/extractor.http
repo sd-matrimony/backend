@@ -1,0 +1,19 @@
+@host = http://localhost:5000/api/extractor
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDUzMjczMzQsInR5cGUiOiJhY2Nlc3MiLCJfaWQiOiI2N2Q3ZWYyMjBiMzhlZDFiOWY5Mjk3YTYiLCJyb2xlIjoiYWRtaW4ifQ.ftPUU6aChdTpwxXEnpbvR6eCpTz5wFpxmP_23SalYqs
+
+### extract image
+POST {{host}}
+Authorization: {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="female.jpg"
+Content-Type: image/png
+
+< ./imgs/female.jpg
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="male.jpg"
+Content-Type: image/jpg
+
+< ./imgs/male.jpg
+------WebKitFormBoundary--

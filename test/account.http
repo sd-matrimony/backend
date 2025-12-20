@@ -1,0 +1,207 @@
+@host = http://localhost:5000/api/account
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3NTQwNDA0NzUsIl9pZCI6IjY4OGEwYmI5MmNmMDBjMjQ1ZWU2YTFkZiIsInJvbGUiOiJ1c2VyIiwiYXBwcm92YWxTdGF0dXMiOiJhcHByb3ZlZCJ9.ibQNTjrVT0-bi79oL4-BH0iLqqtyozisVD3EKinLRwg
+
+
+### user details
+GET {{host}}/check-approval-status
+Authorization: {{token}}
+
+
+### user details
+GET {{host}}/me
+Authorization: {{token}}
+
+
+### user details
+GET {{host}}/user-deatils-mini
+Authorization: {{token}}
+
+
+### user exists
+GET {{host}}/exists?email=7550246069
+Authorization: {{token}}
+
+
+### register - user
+POST {{host}}/register
+Content-Type: application/json
+
+{
+  "fullName": "Raj kumar",
+  "email": "yhtggg@0ires.com",
+  "password": "12345678",
+  "role": "user",
+  "gender": "Male",
+  "dob": "1999-07-16T12:22:00.000Z",
+  "maritalStatus": "Single",
+  "proffessionalDetails":{
+    "highestQualification": "Master's",
+    "qualifications": "B.Com, M.Com",
+    "companyName": "TCS",
+    "profession": "Software Engineer",
+    "sector": "IT / Software",
+    "salary": 80030
+  },
+  "contactDetails": {
+    "address": "680 Nguyen Cliffs\nNew Amy, IL 82099",
+    "mobile": "7550246069"
+  },
+  "familyDetails": {
+    "fatherName": "Aaron",
+    "motherName": "Marissa",
+    "noOfBrothers": 2,
+    "noOfSisters": 2,
+    "birthOrder": 1
+  },
+  "vedicHoroscope": {
+    "rasi": "Gemini",
+    "lagna": "Gemini",
+    "nakshatra": "Ashwini",
+    "dashaPeriod": "14 months",
+    "placeofBirth": "Port Elizabethview",
+    "timeOfBirth": "8:30 AM",
+    "expectation": "nothing else"
+  },
+  "partnerExpectation": {
+    "maritalStatus": "Single"
+  },
+  "otherDetails": {
+    "houseType": "own",
+    "height": 180,
+    "color": "brown"
+  }
+}
+
+
+### register - admin
+POST {{host}}/register
+Content-Type: application/json
+
+{
+  "fullName": "WhitneyPeterson",
+  "email": "admin@gmail.com",
+  "role": "admin",
+  "password": "12345678",
+  "contactDetails": {
+    "mobile": "1234567890",
+    "address": "680 Nguyen Cliffs\nNew Amy, IL 82099"
+  }
+}
+
+
+### admin login
+POST {{host}}/login
+Content-Type: application/json
+
+{
+  "email": "admin@sdmatrimony.com",
+  "password": "12345678",
+  "role": "admin"
+}
+
+
+### user login
+POST {{host}}/login
+Content-Type: application/json
+
+{
+  "email": "raj@gmail.com",
+  "password": "12345678",
+  "role": "user"
+}
+
+
+### get access token using refresh token
+POST {{host}}/access-token
+Content-Type: application/json
+
+
+### forget password
+POST {{host}}/forgot-pass
+Content-Type: application/json
+
+{
+  "email": "kent11@gmail.com",
+  "role": "user"
+}
+
+
+### reset password
+POST {{host}}/reset-pass
+Content-Type: application/json
+
+{
+  "email": "kent11@gmail.com",
+  "password": "12345678",
+  "otp": 863776,
+  "role": "user"
+}
+
+
+### verify account
+POST {{host}}/verify
+Content-Type: application/json
+
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTM5NjkxMzYsInR5cGUiOiJ2ZXJpZnlUb2tlbiIsIl9pZCI6IjY4OGI2ZTAwZDIyOGE5NTlhNTc5ZmE3NiIsInJvbGUiOiJ1c2VyIn0.uIjWWSO8nrAY5VIYOL51mm5jZX793NHcwy0Rw1wuIIE"
+}
+
+
+### resend verify email
+POST {{host}}/resend-verify-email
+Content-Type: application/json
+Authorization: {{token}}
+
+{
+  "email": "foniy64530@0tires.com"
+}
+
+
+### upload register profile img
+POST {{host}}/register-image
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="image"; filename="1.jpg"
+Content-Type: image/jpg
+
+< ./imgs/male.jpg
+------WebKitFormBoundary--
+
+
+### logout
+POST {{host}}/logout
+Authorization: {{token}}
+Content-Type: application/json
+
+
+### update password
+PUT {{host}}/password
+Content-Type: application/json
+Authorization: {{token}}
+
+{
+  "oldPassword": "87654321",
+  "newPassword": "12345678"
+}
+
+
+### email update
+PUT {{host}}/email
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "email": "raj@gmail.com"
+}
+
+
+### mobile update
+PUT {{host}}/mobile
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "mobile": "9876543210"
+}
+

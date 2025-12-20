@@ -1,0 +1,99 @@
+@host = http://localhost:5000/api/super-admin
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3NjQyMTczNTQsIl9pZCI6IjY4ZjhjNzQ2NGU2MzQxZTc4MDEyMTVhZiIsInJvbGUiOiJzdXBlci1hZG1pbiJ9.kLaBQtnz-Z8d1pkd_vHdmb1s_9uxEBRM9ySPEWtBh98
+
+
+### paid users --- limit=4&skip=20
+GET {{host}}/users/paid
+Authorization: {{token}}
+
+
+### assisted subscribed users --- limit=4&skip=20
+GET {{host}}/users/assisted-subscribed
+Authorization: {{token}}
+
+
+### users all payments --- limit=4&skip=20
+GET {{host}}/users/all-payments
+Authorization: {{token}}
+
+
+### users created by --- limit=4&skip=20
+GET {{host}}/users/created-by?createdBy=68942a49660c9ca1bf10293c
+Authorization: {{token}}
+
+
+### users count by group by date or caste
+GET {{host}}/users/grouped-by-admin/count?type=caste
+Authorization: {{token}}
+
+
+### users count by date or caste
+GET {{host}}/users/grouped/count?date=2025-11-04
+Authorization: {{token}}
+
+
+### users list by date or caste (date=2025-11-04 | createdBy | date | skip | limit)
+GET {{host}}/users/grouped/list?date=2025-11-04&createdBy=68f8c6e14e6341e7801215ac
+Authorization: {{token}}
+
+
+### admins
+GET {{host}}/admins
+Authorization: {{token}}
+
+
+### get not invited users --- limit=4&skip=20 any allowed user filter
+GET {{host}}/users/not-invited
+Authorization: {{token}}
+
+
+### create admin
+POST {{host}}/admin
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "fullName": "Vasan",
+  "email": "vasan@admin.com",
+  "password": "12345678"
+}
+
+
+### make payment for user
+POST {{host}}/user/payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "amount": 40000,
+  "subscribedTo": "diamond",
+  "noOfProfilesCanView": 100,
+  "isAssisted": true,
+  "assistedMonths": 2
+}
+
+
+### update admin
+PUT {{host}}/admin/68942a49660c9ca1bf10293c
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "fullName": "Vasan",
+  "isDeleted": false
+}
+
+
+### update invited
+PUT {{host}}/user/invite/689b0532e047974273a48789
+Authorization: {{token}}
+
+
+### reset password
+PUT {{host}}/user/password/689b0532e047974273a48789
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "password": "12345678"
+}

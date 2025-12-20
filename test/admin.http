@@ -1,0 +1,94 @@
+@host = http://localhost:5000/api/admin
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3NTQ1NDY3MDUsIl9pZCI6IjY4NzVkZmYwYTljMGM0MmIwMTAwZDRjNiIsInJvbGUiOiJhZG1pbiJ9.wmdYJgbvbuyMEjk22C-OtMi32MbMTZyF3sDN45KIxwg
+
+
+### users list ---- skip=6&limit=8&approvalStatus=["pending","rejected"]&ageRange=below_25&salaryRange=20000_30000
+GET {{host}}/users?approvalStatus=approved
+Authorization: {{token}}
+
+
+### married users --- limit=4&skip=20
+GET {{host}}/users/married
+Authorization: {{token}}
+
+
+### find user --- _id,email,mobile,fullName
+GET {{host}}/user/find?email=
+Authorization: {{token}}
+
+
+### create users
+POST {{host}}/users
+Authorization: {{token}}
+Content-Type: application/json
+
+[
+  {
+    "fullName": "WhitneyPeterson",
+    "email": "raj118@gmail.com",
+    "password": "12345678",
+    "role": "user",
+    "gender": "Male",
+    "dob": "1950-07-16T12:22:00.000Z",
+    "maritalStatus": "Single",
+    "proffessionalDetails":{
+      "highestQualification": "Bachelor's",
+      "qualifications": "bcom",
+      "companyName": "TCS",
+      "profession": "Doctor",
+      "sector": "IT",
+      "salary": 80030
+    },
+    "contactDetails":{
+      "address": "680 Nguyen Cliffs\nNew Amy, IL 82099"
+    },
+    "familyDetails": {
+      "fatherName": "Aaron",
+      "motherName": "Marissa",
+      "noOfBrothers": 2,
+      "noOfSisters": 2,
+      "birthOrder": 1
+    },
+    "vedicHoroscope": {
+      "rasi": "Gemini",
+      "lagna": "Gemini",
+      "nakshatra": "Ashwini",
+      "dashaPeriod": "14 months",
+      "placeofBirth": "Port Elizabethview",
+      "timeOfBirth": "8:30 AM",
+      "expectation": "nothing else"
+    },
+    "partnerExpectation": {
+      "maritalStatus": "Single"
+    },
+    "otherDetails": {
+      "houseType": "own",
+      "height": 180,
+      "color": "brown"
+    }
+  }
+]
+
+
+### user married to
+POST {{host}}/user/married-to
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "_id": "6875f8af7052b0df15981cb6",
+  "marriedTo": "6875f8af7052b0df15981cbd",
+  "marriedOn": "2025-07-16T12:22:00.000Z"
+}
+
+
+### update user details
+PUT {{host}}/user
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "_id": "6875f8c17052b0df15981d7a",
+  "approvalStatus": "approved"
+}
+

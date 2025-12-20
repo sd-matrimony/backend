@@ -1,0 +1,31 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.16.0",
+    "@hono/zod-validator": "^0.7.2",
+    "axios": "^1.13.1",
+    "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.7.0",
+    "hono": "^4.8.5",
+    "hono-rate-limiter": "^0.4.2",
+    "mongoose": "^8.16.4",
+    "nodemailer": "^7.0.10",
+    "redis": "^5.7.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@ngneat/falso": "^8.0.2",
+    "@types/node": "^20.19.8",
+    "@types/nodemailer": "^7.0.3",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

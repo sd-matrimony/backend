@@ -1,0 +1,31 @@
+@host = http://localhost:5000/api/payment
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3NTQ3MjE5NzgsIl9pZCI6IjY4OGI2ZTAwZDIyOGE5NTlhNTc5ZmE3NiIsInJvbGUiOiJ1c2VyIiwiYXBwcm92YWxTdGF0dXMiOiJhcHByb3ZlZCJ9.6b2kcltVt0df2iqIutr_RjKEjWytrNETS4kF88cym8E
+
+
+### create order
+POST {{host}}/create-order
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "subscribedTo": "basic",
+  "noOfProfilesCanView": 50,
+  "isAssisted": false,
+  "assistedMonths": 0
+}
+
+
+### verify payment
+POST {{host}}/verify
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "amount": 40000,
+  "subscribedTo": "diamond",
+  "noOfProfilesCanView": 100,
+  "isAssisted": true,
+  "assistedMonths": 2,
+  "paymentId": "pay_R38H20PKxSnWEI",
+  "orderId": "order_R38GiDjTIpX9Ip"
+}

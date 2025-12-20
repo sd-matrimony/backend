@@ -1,0 +1,14 @@
+@host = http://localhost:5000/api
+
+#### create random users
+POST {{host}}/faker
+Content-Type: application/json
+
+
+#### update schema
+POST {{host}}/migration
+Content-Type: application/json
+
+
+#### get static files
+GET {{host}}/static/v1/castes.json

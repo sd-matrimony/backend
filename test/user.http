@@ -1,0 +1,125 @@
+@host = http://localhost:5000/api/user
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3NTQwMzA0ODcsIl9pZCI6IjY4OGEwYmI5MmNmMDBjMjQ1ZWU2YTFkZiIsInJvbGUiOiJ1c2VyIiwiYXBwcm92YWxTdGF0dXMiOiJhcHByb3ZlZCJ9.34ylgLM2GKgnalptbx4o6Rd1f3DzN6d6uaf1K_3_BfA
+
+
+### user details
+GET {{host}}/profile/688a0b802cf00c245ee6a12b
+Authorization: {{token}}
+
+
+### get current plan
+GET {{host}}/current-plan
+Authorization: {{token}}
+
+
+### getPartnerPreferences
+GET {{host}}/partner-preferences
+Authorization: {{token}}
+
+
+### getMathces ?limit=4&skip=0&ageRange=above_40&rasi=Aries&lagna=Aries&maritalStatus=Single&isBlocked=false&isDeleted=false&minSalary=10000&minQualification=Bachelor&profession=Software Engineer&motherTongue=["Hindi","English"]
+GET {{host}}/matches
+Authorization: {{token}}
+
+
+### get Like/disLikes List ?limit=4&skip=0&type=disliked
+GET {{host}}/likes-list
+Authorization: {{token}}
+
+
+### get unlocked profiles
+GET {{host}}/unlocked
+Authorization: {{token}}
+
+
+### add Like/disLike
+POST {{host}}/addliked
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "688a1171e775c818c4d99d15"
+}
+
+
+### remove Like/disLike
+POST {{host}}/removeliked
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "67ce9f504ae2647f21bde5c0"
+}
+
+
+### update profile details
+PUT {{host}}/profile
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "fullName": "Raj kumar",
+  "partnerPreferences": {
+    "minAge": 20,
+    "maxAge": 30,
+    "minSalary": 10000,
+    "minQualification": "Bachelor's",
+    "profession": "Software Engineer",
+    "motherTongue": "Tamil",
+    "caste": ""
+  },
+  "otherDetails": {
+    "caste": "Mudaliar"
+  }
+}
+
+
+### upload profile img
+PUT {{host}}/images
+Authorization: {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="1.jpg"
+Content-Type: image/jpg
+
+< ./imgs/male.jpg
+------WebKitFormBoundary
+Content-Disposition: form-data; name="isProfilePic"
+
+true
+------WebKitFormBoundary--
+
+
+### upload multiple images
+PUT {{host}}/images
+Authorization: {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="1.jpg"
+Content-Type: image/jpg
+
+< ./imgs/male.jpg
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="2.jpg"
+Content-Type: image/jpg
+
+< ./imgs/female.jpg
+------WebKitFormBoundary--
+
+
+### delete image
+DELETE {{host}}/image/ayz0slcjmfsmt60ihvz1
+Authorization: {{token}}
+
+
+### unlock profile
+POST {{host}}/unlock
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "_id": "688a0b802cf00c245ee6a12b"
+}
+
