@@ -37,7 +37,7 @@ export const getUserDetails = async (c: zContext<{ param: typeof _idParamSchema 
   let select = "-refreshTokens -password -liked -verifiyOtp -role -brokerAppointed -approvalStatus -email"
 
   if (!hasFullAccess) {
-    select += " -contactDetails -vedicHoroscope.vedicHoroscopePic -vedicHoroscope.nakshatra -vedicHoroscope.rasi -vedicHoroscope.lagna"
+    select += " -contactDetails -vedicHoroscope.vedicHoroscopePic"
   }
 
   const userDetails = await User.findOne({ _id })
@@ -111,7 +111,7 @@ export const getMatches = async (c: zContext<{ query: typeof matchedUsersSchema 
     payload.gender = "Male" // ["Female", "Other"]
   }
 
-  const filters = getFilterObj({ ...rest, ...payload, })
+  const filters = getFilterObj({ ...rest, ...payload })
 
   const liked = user?.liked || []
 

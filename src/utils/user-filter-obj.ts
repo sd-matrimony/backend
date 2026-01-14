@@ -53,7 +53,7 @@ export function getFilterObj(obj: objT) {
   const {
     gender, isMarried, salaryRange, ageRange, approvalStatus,
     minQualification, sector, profession, minSalary, motherTongue,
-    rasi, lagna, maritalStatus, isBlocked, isDeleted,
+    rasi, lagna, nakshatra, maritalStatus, isBlocked, isDeleted,
     caste, religion, minAge, maxAge, createdBy, fullName,
   } = obj!
 
@@ -76,6 +76,7 @@ export function getFilterObj(obj: objT) {
 
   setFilter(filter, "gender", gender, genders.length)
   setFilter(filter, "maritalStatus", maritalStatus, maritalStatuses.length)
+  setFilter(filter, "vedicHoroscope.nakshatra", nakshatra, 27)
   setFilter(filter, "vedicHoroscope.rasi", rasi, 12)
   setFilter(filter, "vedicHoroscope.lagna", lagna, 12)
   setFilter(filter, "otherDetails.caste", caste, Infinity, true)
