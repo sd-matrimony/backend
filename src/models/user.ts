@@ -69,6 +69,11 @@ const userSchema = new Schema({
     },
   },
 
+  hasDisability: {
+    type: Boolean,
+    default: false,
+  },
+
   contactDetails: {
     mobile: {
       type: String,
@@ -82,6 +87,7 @@ const userSchema = new Schema({
   proffessionalDetails: {
     highestQualification: String,
     qualifications: String,
+    companyLocation: String,
     companyName: String,
     profession: String,
     sector: String,
@@ -146,7 +152,7 @@ const userSchema = new Schema({
     motherTongue: String,
     houseType: String,
     religion: String,
-    height: Number,
+    height: String,
     color: String,
     caste: String,
     subCaste: String,
