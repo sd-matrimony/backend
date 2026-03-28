@@ -144,3 +144,5 @@ package-lock.json
 /uploads
 /test/sample1.png
 /dist
+
+settings.local.json
