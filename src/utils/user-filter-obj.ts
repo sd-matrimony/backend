@@ -54,7 +54,7 @@ export function getFilterObj(obj: objT) {
     gender, isMarried, salaryRange, ageRange, approvalStatus,
     minQualification, sector, profession, minSalary, motherTongue,
     rasi, lagna, nakshatra, maritalStatus, isBlocked, isDeleted,
-    caste, religion, minAge, maxAge, createdBy, fullName,
+    caste, religion, minAge, maxAge, createdBy, fullName, email, mobile,
   } = obj!
 
   const filter: any = {
@@ -72,6 +72,14 @@ export function getFilterObj(obj: objT) {
 
   if (fullName) {
     filter.fullName = regexQuery(fullName, true)
+  }
+
+  if (email) {
+    filter.email = regexQuery(email, true)
+  }
+
+  if (mobile) {
+    filter["contactDetails.mobile"] = regexQuery(mobile, true)
   }
 
   setFilter(filter, "gender", gender, genders.length)

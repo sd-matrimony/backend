@@ -33,6 +33,8 @@ export const findUsersSchema = z.object({
   maritalStatus: enumQuery(maritalStatusEnum).optional(),
   approvalStatus: enumQuery(approvalStatusEnum).optional(),
   minQualification: educationEnum.optional(),
+  email: z.string().optional(),
+  mobile: z.string().optional(),
 })
   .refine((data) => {
     if (data.minAge && data.maxAge && data.minAge > data.maxAge) {
