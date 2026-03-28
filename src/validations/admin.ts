@@ -63,6 +63,18 @@ export const userMarriedToSchema = z.object({
   marriedOn: z.iso.datetime("Invalid Date").optional(),
 })
 
+export const bulkUpdateUsersSchema = z.array(
+  userSchema
+    .omit({ email: true, password: true, role: true })
+    .partial()
+    .safeExtend({
+      _id: z.string(),
+      contactDetails: z.object({
+        address: z.string().optional(),
+      }).optional(),
+    })
+).min(1)
+
 export const updateUserSchema = userSchema
   .omit({
     email: true,

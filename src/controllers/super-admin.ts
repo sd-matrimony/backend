@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type {
   skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema,
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
-  resetPassByAdminSchema, mkePaymentSchema,
+  resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
@@ -423,4 +423,31 @@ export async function makePaymentForUser(c: zContext<{ json: typeof mkePaymentSc
 
   const res = await onPaid({ _id, role: "user" }, { ...body, orderId: `by-admin-${Date.now()}` })
   return c.json(res)
+}
+
+function flattenForSet(obj: any, prefix = ""): Record<string, any> {
+  const result: Record<string, any> = {}
+  for (const [key, value] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key
+    if (value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      Object.assign(result, flattenForSet(value, fullKey))
+    } else if (value !== undefined) {
+      result[fullKey] = value
+    }
+  }
+  return result
+}
+
+export async function bulkUpdateUsers(c: zContext<{ json: typeof bulkUpdateUsersSchema }>) {
+  const updates = c.req.valid("json")
+
+  const bulkOps = updates.map(({ _id, ...rest }) => ({
+    updateOne: {
+      filter: { _id },
+      update: { $set: flattenForSet(rest) },
+    }
+  })) as any[]
+
+  await User.bulkWrite(bulkOps)
+  return c.json({ message: `${updates.length} user(s) updated successfully` })
 }

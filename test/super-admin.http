@@ -97,3 +97,21 @@ Content-Type: application/json
 {
   "password": "12345678"
 }
+
+
+### bulk user change
+PUT {{host}}/users/bulk
+Authorization: {{token}}
+Content-Type: application/json
+
+[
+  {
+    "_Id": "68f8c6e14e6341e7801215ac",
+    "isDeleted": true
+  },
+  {
+    "_Id": "68f8c6e14e6341e7801215ad",
+    "isDeleted": true
+  }
+]
+
