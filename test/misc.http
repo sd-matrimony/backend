@@ -9,6 +9,12 @@ Content-Type: application/json
 POST {{host}}/migration
 Content-Type: application/json
 
+{
+  "caste": "Yadav",
+  "to": "Yadavar",
+  "subTo": ""
+}
+
 
 #### get static files
 GET {{host}}/static/v1/castes.json

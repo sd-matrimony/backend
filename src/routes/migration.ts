@@ -9,6 +9,7 @@ const migrationRoutes = new Hono()
 migrationRoutes
   .post('/', async (c) => {
     if (env.NODE_ENV === 'development') return c.json({ message: 'This route is only available in development mode' }, 400)
+    const { caste, to, subTo } = await c.req.json()
 
     // rename: paymentRefId -> payment
     // await UserAccess.updateMany(
@@ -20,12 +21,12 @@ migrationRoutes
 
 
     await User.updateMany(
-      { createdBy: "" },
+      { "otherDetails.caste": caste },
       [
         {
           $set: {
-            "otherDetails.subCaste": "$otherDetails.caste",
-            "otherDetails.caste": "Mudaliyar"
+            "otherDetails.caste": to,
+            "otherDetails.subCaste": subTo,
           }
         }
       ]
