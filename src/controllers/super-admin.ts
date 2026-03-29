@@ -155,69 +155,99 @@ export async function getUsersByCreatedBy(c: zContext<{ query: typeof usersCreat
 }
 
 export async function getUsersGroupedByAdminCount(c: zContext<{ query: typeof usersGroupedByAdminCountSchema }>) {
-  const { type } = c.req.valid("query")
+  const { type, includeByAdmin, gender } = c.req.valid("query")
 
   const groupKey =
     type === "date"
       ? { $dateToString: { format: "%d-%m-%Y", date: "$createdAt" } }
       : "$otherDetails.caste"
 
-  const result = await User.aggregate([
-    {
-      $group: {
-        _id: {
-          createdBy: { $ifNull: ["$createdBy", null] },
-          key: {
-            $ifNull: [groupKey, "Unknown"],
+  const matchStage = {
+    ...(gender ? { gender } : {}),
+  }
+
+  if (includeByAdmin) {
+    const result = await User.aggregate([
+      ...(Object.keys(matchStage).length ? [{ $match: matchStage }] : []),
+      {
+        $group: {
+          _id: {
+            createdBy: { $ifNull: ["$createdBy", null] },
+            key: {
+              $ifNull: [groupKey, "Unknown"],
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.createdBy",
+          counts: {
+            $push: {
+              k: "$_id.key",
+              v: "$count",
+            },
           },
         },
+      },
+      {
+        $lookup: {
+          from: "admins",
+          localField: "_id",
+          foreignField: "_id",
+          as: "adminDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$adminDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          fullName: "$adminDetails.fullName",
+          email: "$adminDetails.email",
+          data: {
+            $arrayToObject: {
+              $filter: {
+                input: "$counts",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $ne: ["$$item.k", null] },
+                    { $ne: ["$$item.k", undefined] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    ])
+    return c.json(result)
+  }
+
+  const result = await User.aggregate([
+    ...(Object.keys(matchStage).length ? [{ $match: matchStage }] : []),
+    {
+      $group: {
+        _id: { $ifNull: [groupKey, "Unknown"] },
         count: { $sum: 1 },
       },
     },
     {
       $group: {
-        _id: "$_id.createdBy",
-        counts: {
-          $push: {
-            k: "$_id.key",
-            v: "$count",
-          },
-        },
-      },
-    },
-    {
-      $lookup: {
-        from: "admins",
-        localField: "_id",
-        foreignField: "_id",
-        as: "adminDetails",
-      },
-    },
-    {
-      $unwind: {
-        path: "$adminDetails",
-        preserveNullAndEmptyArrays: true,
+        _id: null,
+        counts: { $push: { k: "$_id", v: "$count" } },
       },
     },
     {
       $project: {
         _id: 1,
-        fullName: "$adminDetails.fullName",
-        email: "$adminDetails.email",
-        data: {
-          $arrayToObject: {
-            $filter: {
-              input: "$counts",
-              as: "item",
-              cond: {
-                $and: [
-                  { $ne: ["$$item.k", null] },
-                  { $ne: ["$$item.k", undefined] },
-                ],
-              },
-            },
-          },
-        },
+        data: { $arrayToObject: "$counts" },
       },
     },
   ])

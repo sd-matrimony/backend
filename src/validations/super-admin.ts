@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import { adminSchema, approvalStatusEnum, passwordSchema, planEnum } from "./general.js";
+import { adminSchema, approvalStatusEnum, passwordSchema, planEnum, genderEnum } from "./general.js";
 
 export const usersGroupedByAdminCountSchema = z.object({
   type: z.enum(["date", "caste"], { error: "Type must be either date or caste" }).default("date").optional(),
+  includeByAdmin: z.enum(["true", "false"]).transform(v => v === "true").optional().default("false" as unknown as boolean),
+  gender: z.union([genderEnum, z.literal("")]).optional().default(""),
 })
 
 export const usersGroupedCountSchema = z.object({
