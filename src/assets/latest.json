@@ -1,5 +1,5 @@
 {
-  "castes": "v3/castes.json",
+  "castes": "v4/castes.json",
   "casteMap": "v1/caste-map.json",
   "educationLevels": "v1/education-levels.json",
   "professions": "v1/professions.json",
