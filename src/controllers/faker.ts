@@ -13,6 +13,7 @@ import castesMap from "../assets/v1/caste-map.json" with { type: "json" };
 import nakshatra from "../assets/v1/nakshatra.json" with { type: "json" };
 import sectors from "../assets/v1/sectors.json" with { type: "json" };
 import castes from "../assets/v2/castes.json" with { type: "json" };
+import castes2 from "../assets/v3/castes.json" with { type: "json" };
 import raasi from "../assets/v1/raasi.json" with { type: "json" };
 import latest from "../assets/latest.json" with { type: "json" };
 
