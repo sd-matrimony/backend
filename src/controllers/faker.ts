@@ -2,8 +2,11 @@ import {
   randFullName, randEmail, randPassword, randNumber,
   randPhoneNumber, randStreetAddress, randBetweenDate,
   randCompanyName, randWord, randBoolean, randText,
-  rand, toCollection,
+  rand,
 } from "@ngneat/falso";
+import { readFile } from "fs/promises";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 import educationLevels from "../assets/v1/education-levels.json" with { type: "json" };
 import professions from "../assets/v1/professions.json" with { type: "json" };
@@ -12,15 +15,17 @@ import languages from "../assets/v1/languages.json" with { type: "json" };
 import castesMap from "../assets/v1/caste-map.json" with { type: "json" };
 import nakshatra from "../assets/v1/nakshatra.json" with { type: "json" };
 import sectors from "../assets/v1/sectors.json" with { type: "json" };
-import castes from "../assets/v2/castes.json" with { type: "json" };
-import castes2 from "../assets/v3/castes.json" with { type: "json" };
-import castes3 from "../assets/v4/castes.json" with { type: "json" };
+import castes from "../assets/v4/castes.json" with { type: "json" };
 import raasi from "../assets/v1/raasi.json" with { type: "json" };
 import latest from "../assets/latest.json" with { type: "json" };
 
 import { approvalStatuses, maritalStatuses, genders } from "../utils/index.js";
+import { getImgUrl } from "../services/cloudinary.js";
 
-const generateRandomUser = () => {
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const imagesRoot = join(__dirname, "../../../images");
+
+const generateRandomUser = async () => {
   const gender = rand(genders)
   const noOfBrothers = randNumber({ min: 0, max: 5 })
   const noOfSisters = randNumber({ min: 0, max: 5 })
@@ -28,12 +33,19 @@ const generateRandomUser = () => {
   const minAge = randNumber({ min: 20, max: 30 })
   const maxAge = randNumber({ min: minAge, max: 45 })
 
-  const profileImg = `https://randomuser.me/api/portraits/med/${gender === "Male" ? "men" : "women"}/${randNumber({ min: 1, max: 99 })}.jpg`
+  const genderFolder = gender === "Male" ? "male" : "female"
+
+  const imgNum = randNumber({ min: 1, max: 40 })
+  const imgPath = join(imagesRoot, genderFolder, `${genderFolder}${imgNum}.jpg`)
+  const imgBuffer = await readFile(imgPath)
+  const imgBlob = new Blob([imgBuffer], { type: "image/jpeg" })
+  const profileImg = await getImgUrl(imgBlob)
+
   const sector = rand(sectors)
   const profession = sector === "Unemployed" ? "Unemployed" : rand(professions)
   const salary = sector === "Unemployed" ? 0 : randNumber({ min: 10000, max: 150000 })
 
-  const caste = rand(castes)
+  const caste = rand(castes.slice(1, 14))
   const found = castesMap[caste as keyof typeof castesMap] || []
   const subCaste = rand(found) || ""
 
@@ -77,10 +89,6 @@ const generateRandomUser = () => {
       nakshatra: rand(nakshatra).split(" (")[0],
       rasi: rand(raasi).split(" (")[0],
       lagna: rand(raasi).split(" (")[0],
-      // dashaPeriod: randWord(),
-      // placeOfBirth: randStreetAddress(),
-      // timeOfBirth: `${randNumber({ min: 1, max: 12 })}:${randNumber({ min: 0, max: 59 })} ${randWord({ length: 1, dictionary: ['AM', 'PM'] })[0]}`,
-      // vedicHoroscopePic: "",
     },
     partnerPreferences: {
       minAge,
@@ -98,14 +106,11 @@ const generateRandomUser = () => {
     },
     otherDetails: {
       motherTongue: rand(languages),
-      // houseType: rand(['Own', 'Lease', 'Rental']),
       religion: rand(religions),
-      // height: randNumber({ min: 150, max: 200 }),
-      // color: randWord(),
       subCaste,
       caste,
     },
   };
 };
 
-export const randomUsers = () => toCollection(() => generateRandomUser(), { length: 200 })
+export const randomUsers = () => Promise.all(Array.from({ length: 200 }, () => generateRandomUser()))
