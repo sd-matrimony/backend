@@ -243,7 +243,8 @@ export const imgUpload = async (c: zContext<{ form: typeof imgUploadSchema }>) =
   const isProfilePic = formData.isProfilePic
   const images = formData.images
 
-  const uploadedImages = await Promise.all(images.map(async (image) => await getImgUrl(image)))
+  const _id = user.role === "user" ? user._id : formData._id
+  const uploadedImages = await Promise.all(images.map(async (image) => await getImgUrl(image, _id)))
 
   const updateQuery: any = {
     $push: {
@@ -255,7 +256,6 @@ export const imgUpload = async (c: zContext<{ form: typeof imgUploadSchema }>) =
     updateQuery.profileImg = uploadedImages[0]
   }
 
-  const _id = user.role === "user" ? user._id : formData._id
   await User.updateOne({ _id }, updateQuery)
 
   return c.json({ message: 'User image uploaded successfully' })

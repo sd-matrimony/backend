@@ -18,7 +18,7 @@ import {
 
 import { welcome, resendVerifyEmail as resendVerifyEmailTemp, forgotPass } from '../mail-templates/index.js';
 
-import { getImgUrl, transporter } from '../services/index.js';
+import { claimImage, getImgUrl, transporter } from '../services/index.js';
 import { Admin, User, getModel } from '../models/index.js';
 
 export const exists = async (c: zContext<{ query: typeof forgotPassSchema }>) => {
@@ -32,7 +32,8 @@ export const exists = async (c: zContext<{ query: typeof forgotPassSchema }>) =>
 }
 
 export const register = async (c: zContext<{ json: typeof registerSchema }>) => {
-  const { email, password, role = "user", ...rest } = c.req.valid("json")
+  const validData = c.req.valid("json")
+  const { email, password, role = "user", ...rest } = validData
 
   const Model = getModel(role)
 
@@ -63,6 +64,15 @@ export const register = async (c: zContext<{ json: typeof registerSchema }>) => 
       mobile: rest?.contactDetails?.mobile || undefined,
     },
   })
+
+  if (validData.role === "user") {
+    const userId = user._id.toString()
+    const imagesToClaim = [
+      ...(validData.profileImg ? [validData.profileImg] : []),
+      ...(validData.images ?? []),
+    ]
+    await Promise.all(imagesToClaim.map(url => claimImage(url, userId)))
+  }
 
   await user.save()
 

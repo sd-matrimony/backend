@@ -20,17 +20,19 @@ migrationRoutes
     // await UserAccess.collection.dropIndex("viewer_1_viewed_1_paymentRefId_1")
 
 
-    await User.updateMany(
-      { "otherDetails.caste": caste },
-      [
-        {
-          $set: {
-            "otherDetails.caste": to,
-            "otherDetails.subCaste": subTo,
-          }
-        }
-      ]
-    );
+    // await User.updateMany(
+    //   { createdBy: "" },
+    //   [
+    //     {
+    //       $set: {
+    //         "otherDetails.subCaste": "$otherDetails.caste",
+    //         "otherDetails.caste": "Mudaliyar"
+    //       }
+    //     }
+    //   ]
+    // );
+
+
 
     return c.json({ message: "Migration done" })
   })
