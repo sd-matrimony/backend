@@ -58,8 +58,9 @@ async function run() {
       $or: [
         { profileImg: { $exists: true, $ne: '' } },
         { images: { $exists: true, $not: { $size: 0 } } },
+        { 'vedicHoroscope.vedicHoroscopePic': { $exists: true, $ne: '' } },
       ],
-    }).select('_id profileImg images').lean()
+    }).select('_id profileImg images vedicHoroscope.vedicHoroscopePic').lean()
     console.log(`Found ${users.length} users with images`)
   }
 
@@ -71,8 +72,11 @@ async function run() {
     const userId = user._id.toString()
 
     const urls: string[] = [
-      ...(user.profileImg ? [user.profileImg] : []),
-      ...(user.images ?? []),
+      ...new Set([
+        ...(user.profileImg ? [user.profileImg] : []),
+        ...(user.images ?? []),
+        ...(user.vedicHoroscope?.vedicHoroscopePic ? [user.vedicHoroscope.vedicHoroscopePic] : []),
+      ])
     ]
 
     const publicIds: string[] = []

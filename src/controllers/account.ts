@@ -68,8 +68,11 @@ export const register = async (c: zContext<{ json: typeof registerSchema }>) => 
   if (validData.role === "user") {
     const userId = user._id.toString()
     const imagesToClaim = [
-      ...(validData.profileImg ? [validData.profileImg] : []),
-      ...(validData.images ?? []),
+      ...new Set([
+        ...(validData.profileImg ? [validData.profileImg] : []),
+        ...(validData.images ?? []),
+        ...(validData.vedicHoroscope?.vedicHoroscopePic ? [validData.vedicHoroscope.vedicHoroscopePic] : []),
+      ])
     ]
     await Promise.all(imagesToClaim.map(url => claimImage(url, userId)))
   }
