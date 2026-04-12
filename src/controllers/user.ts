@@ -119,6 +119,7 @@ export const getMatches = async (c: zContext<{ query: typeof matchedUsersSchema 
   const select = userSelectFields.split(" ").reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
   const final = await User.aggregate([
     { $match: baseFilters },
+    { $sort: { createdAt: -1 } },
     { $skip: numSkip },
     { $limit: numLimit },
     { $project: select },
@@ -177,6 +178,7 @@ export const getLikesList = async (c: zContext<{ query: typeof skipLimitSchema }
         select: currentPlanSelectFields,
       },
     })
+    .sort({ createdAt: -1 })
     .lean()
 
   // @ts-ignore
@@ -198,6 +200,7 @@ export const getUnlockedProfiles = async (c: Context<Env>) => {
         select: currentPlanSelectFields,
       },
     })
+    .sort({ createdAt: -1 })
     .lean()
 
   const payload = list.map((item) => item.viewed)

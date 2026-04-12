@@ -144,6 +144,7 @@ export async function findUser(c: zContext<{ query: typeof findUserSchema }>) {
 
   const user = await User.find(filters)
     .select(userSelect)
+    .sort({ createdAt: -1 })
     .lean()
 
   return c.json(user)

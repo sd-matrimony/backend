@@ -67,7 +67,7 @@ Content-Type: application/json
   },
   "otherDetails": {
     "houseType": "own",
-    "height": 180,
+    "height": "180",
     "color": "brown"
   }
 }
