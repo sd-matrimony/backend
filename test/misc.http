@@ -10,9 +10,9 @@ POST {{host}}/migration
 Content-Type: application/json
 
 {
-  "caste": "Yadav",
-  "to": "Yadavar",
-  "subTo": ""
+  "caste": "Balija - Gavara Naidu",
+  "to": "Naidu",
+  "subTo": "Balija"
 }
 
 

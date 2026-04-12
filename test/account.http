@@ -28,7 +28,7 @@ Content-Type: application/json
 
 {
   "fullName": "Raj kumar",
-  "email": "yhtggg@0ires.com",
+  "email": "yggu@0ires.com",
   "password": "12345678",
   "role": "user",
   "gender": "Male",
@@ -44,7 +44,7 @@ Content-Type: application/json
   },
   "contactDetails": {
     "address": "680 Nguyen Cliffs\nNew Amy, IL 82099",
-    "mobile": "7550246069"
+    "mobile": "7511226829"
   },
   "familyDetails": {
     "fatherName": "Aaron",
@@ -68,7 +68,8 @@ Content-Type: application/json
   "otherDetails": {
     "houseType": "own",
     "height": "180",
-    "color": "brown"
+    "color": "brown",
+    "caste": "Mudaliyar - Agamudaiyar / Arcot / Thuluva"
   }
 }
 
