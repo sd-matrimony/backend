@@ -13,7 +13,7 @@ import { hashPassword } from "../utils/password.js";
 import { onPaid } from "./payment.js";
 
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt"
-const userSelectFields = "_id fullName email profileImg dob otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
+const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
 
 export async function getPaidUsers(c: zContext<{ query: typeof skipLimitSchema }>) {
   const { limit, skip } = c.req.valid("query") || { limit: 10, skip: 0 }
