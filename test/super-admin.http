@@ -1,5 +1,5 @@
 @host = http://localhost:5000/api/super-admin
-@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3NjQyMTczNTQsIl9pZCI6IjY4ZjhjNzQ2NGU2MzQxZTc4MDEyMTVhZiIsInJvbGUiOiJzdXBlci1hZG1pbiJ9.kLaBQtnz-Z8d1pkd_vHdmb1s_9uxEBRM9ySPEWtBh98
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3ODEzMzY0NzEsIl9pZCI6IjY5Y2NmZGE2NzU2MjkyMDYzYTI2NDZhNiIsInJvbGUiOiJzdXBlci1hZG1pbiJ9.0CNWRe9B7gtsTS4PIaHKqDOyPAg7CoGaFmITYAUjBNY
 
 
 ### paid users --- limit=4&skip=20
@@ -42,13 +42,18 @@ GET {{host}}/admins
 Authorization: {{token}}
 
 
-### get not invited users --- limit=4&skip=20 any allowed user filter
-GET {{host}}/users/not-invited
+### get user invitations --- limit=4&skip=20 any allowed user filter
+GET {{host}}/users/invitations
 Authorization: {{token}}
 
 
 ### get user current plan
-GET {{host}}/user/689b0532e047974273a48789/plan
+GET {{host}}/user/6a2d033498311301c39e280a/plan
+Authorization: {{token}}
+
+
+### remove user plan
+DELETE {{host}}/user/6a2d033498311301c39e280a/plan
 Authorization: {{token}}
 
 

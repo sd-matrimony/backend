@@ -355,7 +355,7 @@ export async function getAdmins(c: Context<Env>) {
   return c.json(admins)
 }
 
-export async function getNotInvitedUsers(c: zContext<{ query: typeof findUsersSchema }>) {
+export async function getUsersInvitations(c: zContext<{ query: typeof findUsersSchema }>) {
   const { limit, skip, ...filters } = c.req.valid("query") || { limit: 50, skip: 0 }
 
   const numLimit = Number(limit || 50)
@@ -369,13 +369,22 @@ export async function getNotInvitedUsers(c: zContext<{ query: typeof findUsersSc
   }
 
   const users = await User.find(payload)
-    .select("_id fullName email profileImg contactDetails.mobile dob otherDetails.caste")
+    .select("_id fullName email profileImg contactDetails.mobile dob otherDetails.caste currentPlan")
+    .populate("currentPlan", "subscribedTo expiryDate")
     .limit(numLimit)
     .skip(numSkip)
     .sort({ createdAt: -1 })
     .lean()
 
   return c.json(users)
+}
+
+export async function removeUserPlan(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+
+  await User.updateOne({ _id }, { $unset: { currentPlan: 1 } })
+
+  return c.json({ message: "Subscription removed successfully" })
 }
 
 export async function updateInvited(c: zContext<{ param: typeof _idParamSchema }>) {
@@ -451,7 +460,10 @@ export async function resetPass(c: zContext<{ param: typeof _idParamSchema, json
 export async function getUserCurrentPlan(c: zContext<{ param: typeof _idParamSchema }>) {
   const { _id } = c.req.valid("param")
 
-  const user = await User.findById(_id).select("currentPlan").populate("currentPlan", "subscribedTo expiryDate").lean()
+  const user = await User.findById(_id)
+    .select("currentPlan")
+    .populate("currentPlan", "subscribedTo expiryDate")
+    .lean()
   if (!user) return c.json({ message: "User not found" }, 404)
 
   return c.json((user as any).currentPlan ?? null)

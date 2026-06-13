@@ -4,8 +4,8 @@ import {
   getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments,
   getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList,
   getUsersGroupedCount, getAdmins, createAdmin,
-  updateAdmin, getNotInvitedUsers, updateInvited, resetPass,
-  makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan,
+  updateAdmin, getUsersInvitations, updateInvited, resetPass,
+  makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
 } from "../controllers/super-admin.js";
 
 import {
@@ -29,8 +29,9 @@ superAdminRoutes
   .get("/users/grouped-by-admin/count", zv("query", usersGroupedByAdminCountSchema), getUsersGroupedByAdminCount)
   .get("/users/grouped/count", zv("query", usersGroupedCountSchema), getUsersGroupedCount)
   .get("/users/grouped/list", zv("query", usersGroupedListSchema), getUsersGroupedList)
-  .get("/users/not-invited", zv("query", findUsersSchema), getNotInvitedUsers)
+  .get("/users/invitations", zv("query", findUsersSchema), getUsersInvitations)
   .get("/user/:_id/plan", zv("param", _idParamSchema), getUserCurrentPlan)
+  .delete("/user/:_id/plan", zv("param", _idParamSchema), removeUserPlan)
   .get("/admins", getAdmins)
   .post("/admin", zv("json", adminCreateSchema), createAdmin)
   .post("/user/payment", zv("json", mkePaymentSchema), makePaymentForUser)
