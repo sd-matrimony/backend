@@ -47,6 +47,11 @@ GET {{host}}/users/not-invited
 Authorization: {{token}}
 
 
+### get user current plan
+GET {{host}}/user/689b0532e047974273a48789/plan
+Authorization: {{token}}
+
+
 ### create admin
 POST {{host}}/admin
 Authorization: {{token}}

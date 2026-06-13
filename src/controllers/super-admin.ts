@@ -448,6 +448,15 @@ export async function resetPass(c: zContext<{ param: typeof _idParamSchema, json
   return c.json({ message: "Password reset successfully" })
 }
 
+export async function getUserCurrentPlan(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+
+  const user = await User.findById(_id).select("currentPlan").populate("currentPlan", "subscribedTo expiryDate").lean()
+  if (!user) return c.json({ message: "User not found" }, 404)
+
+  return c.json((user as any).currentPlan ?? null)
+}
+
 export async function makePaymentForUser(c: zContext<{ json: typeof mkePaymentSchema }>) {
   const { _id, ...body } = c.req.valid("json")
 
