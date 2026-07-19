@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type {
   skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema,
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
-  resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema,
+  resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
@@ -487,6 +487,23 @@ function flattenForSet(obj: any, prefix = ""): Record<string, any> {
     }
   }
   return result
+}
+
+export async function updateUserCritical(c: zContext<{ param: typeof _idParamSchema, json: typeof updateUserCriticalSchema }>) {
+  const { _id } = c.req.valid("param")
+  const { email, mobile, salary } = c.req.valid("json")
+
+  const user = await User.findById(_id).select("_id")
+  if (!user) return c.json({ message: "User not found" }, 404)
+
+  const update: Record<string, any> = {}
+  if (email !== undefined) update.email = email
+  if (mobile !== undefined) update["contactDetails.mobile"] = mobile
+  if (salary !== undefined) update["proffessionalDetails.salary"] = salary
+
+  await User.updateOne({ _id }, { $set: update })
+
+  return c.json({ message: "User details updated successfully" })
 }
 
 export async function bulkUpdateUsers(c: zContext<{ json: typeof bulkUpdateUsersSchema }>) {

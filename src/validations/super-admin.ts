@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { adminSchema, approvalStatusEnum, passwordSchema, planEnum, genderEnum } from "./general.js";
+import { adminSchema, approvalStatusEnum, passwordSchema, planEnum, genderEnum, emailSchema, mobileSchema } from "./general.js";
 
 export const usersGroupedByAdminCountSchema = z.object({
   type: z.enum(["date", "caste"], { error: "Type must be either date or caste" }).default("date").optional(),
@@ -51,6 +51,16 @@ export const adminUpdateSchema = adminSchema
 export const resetPassByAdminSchema = z.object({
   password: passwordSchema,
 })
+
+export const updateUserCriticalSchema = z.object({
+  email: emailSchema.optional(),
+  mobile: mobileSchema.optional(),
+  salary: z.number("Salary must be a number").min(0, "Salary must be at least 0").optional(),
+})
+  .refine(
+    (data) => data.email !== undefined || data.mobile !== undefined || data.salary !== undefined,
+    { message: "At least one of email, mobile or salary is required" }
+  )
 
 export const mkePaymentSchema = z.object({
   _id: z.string("ID is required"),

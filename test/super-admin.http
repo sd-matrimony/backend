@@ -109,6 +109,18 @@ Content-Type: application/json
 }
 
 
+### update user critical details (email, mobile, salary)
+PUT {{host}}/user/critical/689b0532e047974273a48789
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "mobile": "9876543210",
+  "salary": 50000
+}
+
+
 ### bulk user change
 PUT {{host}}/users/bulk
 Authorization: {{token}}
