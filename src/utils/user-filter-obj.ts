@@ -54,7 +54,7 @@ export function getFilterObj(obj: objT) {
     gender, isMarried, salaryRange, ageRange, approvalStatus,
     minQualification, sector, profession, minSalary, motherTongue,
     rasi, lagna, nakshatra, maritalStatus, isBlocked, isDeleted,
-    caste, religion, minAge, maxAge, createdBy, fullName, email, mobile,
+    caste, subCaste, religion, minAge, maxAge, createdBy, fullName, email, mobile,
   } = obj!
 
   const filter: any = {
@@ -88,6 +88,7 @@ export function getFilterObj(obj: objT) {
   setFilter(filter, "vedicHoroscope.rasi", rasi, 12)
   setFilter(filter, "vedicHoroscope.lagna", lagna, 12)
   setFilter(filter, "otherDetails.caste", caste, Infinity, true)
+  setFilter(filter, "otherDetails.subCaste", subCaste, Infinity, true)
   setFilter(filter, "otherDetails.religion", religion, Infinity, true)
   setFilter(filter, "otherDetails.motherTongue", motherTongue, Infinity, true)
   setFilter(filter, "proffessionalDetails.sector", sector)
