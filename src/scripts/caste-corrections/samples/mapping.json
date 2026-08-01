@@ -7,5 +7,15 @@
     "fromCaste": "Mudaliyar",
     "toCaste": "Mudaliyar",
     "toSubCaste": "Arcot Mudaliyar"
+  },
+  {
+    "fromCaste": "Mudaliyar",
+    "fromSubCaste": "Sengundar",
+    "toCaste": "Vishwakarma",
+    "toSubCaste": "Sengundar"
+  },
+  {
+    "fromSubCaste": "Aarur Mudaliyar",
+    "toSubCaste": "Arur Mudaliyar"
   }
 ]

@@ -1,8 +1,12 @@
 /**
  * Bulk-update user caste/subCaste from a mapping file.
- * Input: JSON array of { fromCaste, toCaste, toSubCaste? }
- *   - toSubCaste present  -> otherDetails.caste AND otherDetails.subCaste are updated
- *   - toSubCaste absent   -> only otherDetails.caste is updated, subCaste is left untouched
+ * Input: JSON array of { fromCaste?, fromSubCaste?, toCaste?, toSubCaste? }
+ *   - At least one of fromCaste/fromSubCaste is required (what to match on).
+ *   - At least one of toCaste/toSubCaste is required (what to change).
+ *   - fromCaste + fromSubCaste both given -> match users with BOTH.
+ *   - fromSubCaste only (fromCaste omitted) -> match by subCaste regardless of caste.
+ *   - toCaste omitted   -> otherDetails.caste is left untouched, only subCaste is set.
+ *   - toSubCaste omitted -> otherDetails.subCaste is left untouched, only caste is set.
  *
  * Draft by default (read-only: reports match counts + samples, writes nothing).
  * Pass --apply to actually perform the updates.
@@ -30,8 +34,9 @@ import { parseArgs, readJsonFile, loadState, saveState } from './helper.js';
 const DIR = dirname(fileURLToPath(import.meta.url))
 
 type Mapping = {
-  fromCaste: string
-  toCaste: string
+  fromCaste?: string
+  fromSubCaste?: string
+  toCaste?: string
   toSubCaste?: string
 }
 
@@ -65,21 +70,57 @@ function resolveArgs(): Args {
 }
 
 function keyFor(m: Mapping): string {
-  return `${m.fromCaste}=>${m.toCaste}=>${m.toSubCaste ?? ''}`
+  return `${m.fromCaste ?? ''}/${m.fromSubCaste ?? ''}=>${m.toCaste ?? ''}/${m.toSubCaste ?? ''}`
+}
+
+function matchFor(m: Mapping): Record<string, unknown> {
+  const match: Record<string, unknown> = {}
+  if (m.fromCaste) match['otherDetails.caste'] = m.fromCaste
+  if (m.fromSubCaste) match['otherDetails.subCaste'] = m.fromSubCaste
+  return match
+}
+
+function describeFrom(m: Mapping): string {
+  if (m.fromCaste && m.fromSubCaste) return `${m.fromCaste} / ${m.fromSubCaste}`
+  if (m.fromCaste) return m.fromCaste
+  return `(any caste) / ${m.fromSubCaste}`
+}
+
+function describeTo(m: Mapping): string {
+  const parts: string[] = []
+  parts.push(m.toCaste ? `caste="${m.toCaste}"` : 'caste unchanged')
+  parts.push(m.toSubCaste ? `subCaste="${m.toSubCaste}"` : 'subCaste unchanged')
+  return parts.join(', ')
 }
 
 function validateMappings(mappings: unknown): Mapping[] {
   if (!Array.isArray(mappings) || mappings.length === 0) {
-    throw new Error('Input JSON must be a non-empty array of { fromCaste, toCaste, toSubCaste? }')
+    throw new Error('Input JSON must be a non-empty array of { fromCaste?, fromSubCaste?, toCaste?, toSubCaste? }')
   }
 
   return mappings.map((m, i) => {
     if (typeof m !== 'object' || m === null) throw new Error(`Entry ${i} is not an object`)
-    const { fromCaste, toCaste, toSubCaste } = m as Record<string, unknown>
-    if (typeof fromCaste !== 'string' || !fromCaste.trim()) throw new Error(`Entry ${i}: fromCaste is required`)
-    if (typeof toCaste !== 'string' || !toCaste.trim()) throw new Error(`Entry ${i}: toCaste is required`)
-    if (toSubCaste !== undefined && typeof toSubCaste !== 'string') throw new Error(`Entry ${i}: toSubCaste must be a string`)
-    return { fromCaste, toCaste, toSubCaste: toSubCaste || undefined }
+    const { fromCaste, fromSubCaste, toCaste, toSubCaste } = m as Record<string, unknown>
+
+    for (const [key, val] of Object.entries({ fromCaste, fromSubCaste, toCaste, toSubCaste })) {
+      if (val !== undefined && (typeof val !== 'string' || !val.trim())) {
+        throw new Error(`Entry ${i}: ${key} must be a non-empty string when present`)
+      }
+    }
+
+    if (!fromCaste && !fromSubCaste) {
+      throw new Error(`Entry ${i}: at least one of fromCaste/fromSubCaste is required to know what to match`)
+    }
+    if (!toCaste && !toSubCaste) {
+      throw new Error(`Entry ${i}: at least one of toCaste/toSubCaste is required to know what to change`)
+    }
+
+    return {
+      fromCaste: fromCaste as string | undefined,
+      fromSubCaste: fromSubCaste as string | undefined,
+      toCaste: toCaste as string | undefined,
+      toSubCaste: toSubCaste as string | undefined,
+    }
   })
 }
 
@@ -95,28 +136,31 @@ async function run() {
 
   for (const mapping of mappings) {
     const key = keyFor(mapping)
-    const { fromCaste, toCaste, toSubCaste } = mapping
+    const { toCaste, toSubCaste } = mapping
+    const from = describeFrom(mapping)
+    const to = describeTo(mapping)
 
-    if (fromCaste === toCaste && !toSubCaste) {
-      console.log(`[skip] "${fromCaste}" -> no-op (same caste, no subCaste change)`)
+    if ((mapping.fromCaste ?? '') === (toCaste ?? '') && (mapping.fromSubCaste ?? '') === (toSubCaste ?? '')) {
+      console.log(`[skip] "${from}" -> no-op (nothing changes)`)
       continue
     }
 
     if (apply && !restart && state.completed[key]) {
       const prev = state.completed[key]
-      console.log(`[skip] "${fromCaste}" -> "${toCaste}"${toSubCaste ? ` / "${toSubCaste}"` : ''} already applied at ${prev.appliedAt} (matched=${prev.matched}, modified=${prev.modified})`)
+      console.log(`[skip] "${from}" -> "${to}" already applied at ${prev.appliedAt} (matched=${prev.matched}, modified=${prev.modified})`)
       continue
     }
 
-    const matchCount = await User.countDocuments({ 'otherDetails.caste': fromCaste })
+    const match = matchFor(mapping)
+    const matchCount = await User.countDocuments(match)
 
     if (!apply) {
-      const sample = await User.find({ 'otherDetails.caste': fromCaste })
+      const sample = await User.find(match)
         .limit(3)
         .select('fullName otherDetails.caste otherDetails.subCaste')
         .lean()
 
-      console.log(`[draft] "${fromCaste}" -> caste="${toCaste}"${toSubCaste ? `, subCaste="${toSubCaste}"` : ' (subCaste unchanged)'}`)
+      console.log(`[draft] "${from}" -> ${to}`)
       console.log(`        matches: ${matchCount}`)
       if (sample.length) {
         console.log(`        sample: ${sample.map((u: any) => u.fullName).join(', ')}`)
@@ -125,22 +169,23 @@ async function run() {
     }
 
     if (matchCount === 0) {
-      console.log(`[apply] "${fromCaste}" -> no matching users, nothing to do`)
+      console.log(`[apply] "${from}" -> no matching users, nothing to do`)
       state.completed[key] = { key, matched: 0, modified: 0, appliedAt: new Date().toISOString() }
       saveState(statePath, state)
       continue
     }
 
     try {
-      const setStage: Record<string, unknown> = { 'otherDetails.caste': toCaste }
+      const setStage: Record<string, unknown> = {}
+      if (toCaste) setStage['otherDetails.caste'] = toCaste
       if (toSubCaste) setStage['otherDetails.subCaste'] = toSubCaste
 
       const result = await User.updateMany(
-        { 'otherDetails.caste': fromCaste },
+        match,
         [{ $set: setStage }]
       )
 
-      console.log(`[apply] "${fromCaste}" -> caste="${toCaste}"${toSubCaste ? `, subCaste="${toSubCaste}"` : ' (subCaste unchanged)'} — matched=${result.matchedCount}, modified=${result.modifiedCount}`)
+      console.log(`[apply] "${from}" -> ${to} — matched=${result.matchedCount}, modified=${result.modifiedCount}`)
 
       state.completed[key] = {
         key,
@@ -150,7 +195,7 @@ async function run() {
       }
       saveState(statePath, state)
     } catch (err: any) {
-      console.error(`[error] "${fromCaste}" -> "${toCaste}" failed: ${err?.message}`)
+      console.error(`[error] "${from}" -> "${to}" failed: ${err?.message}`)
       console.error('Stopping so the failure can be investigated. Re-run with --apply to resume from here.')
       await mongoose.disconnect()
       process.exit(1)
