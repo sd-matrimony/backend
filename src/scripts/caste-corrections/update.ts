@@ -4,9 +4,11 @@
  *   - At least one of fromCaste/fromSubCaste is required (what to match on).
  *   - At least one of toCaste/toSubCaste is required (what to change).
  *   - fromCaste + fromSubCaste both given -> match users with BOTH.
- *   - fromSubCaste only (fromCaste omitted) -> match by subCaste regardless of caste.
- *   - toCaste omitted   -> otherDetails.caste is left untouched, only subCaste is set.
- *   - toSubCaste omitted -> otherDetails.subCaste is left untouched, only caste is set.
+ *   - fromCaste/fromSubCaste omitted (key absent) -> that field is NOT part of the match at all.
+ *   - fromCaste/fromSubCaste = "" (explicit empty string) -> matches users where that field is
+ *     empty/unset (null or ""), NOT users who already have a real value there.
+ *   - toCaste/toSubCaste omitted (key absent) -> that field is left untouched.
+ *   - toCaste/toSubCaste = "" (explicit empty string) -> that field is CLEARED (set to "").
  *
  * Draft by default (read-only: reports match counts + samples, writes nothing).
  * Pass --apply to actually perform the updates.
@@ -69,28 +71,46 @@ function resolveArgs(): Args {
   }
 }
 
+function markFor(v: string | undefined): string {
+  return v === undefined ? '·' : v === '' ? '∅' : v
+}
+
 function keyFor(m: Mapping): string {
-  return `${m.fromCaste ?? ''}/${m.fromSubCaste ?? ''}=>${m.toCaste ?? ''}/${m.toSubCaste ?? ''}`
+  return `${markFor(m.fromCaste)}/${markFor(m.fromSubCaste)}=>${markFor(m.toCaste)}/${markFor(m.toSubCaste)}`
+}
+
+function emptyOrExact(val: string): Record<string, unknown> | string {
+  return val === '' ? { $in: [null, ''] } : val
 }
 
 function matchFor(m: Mapping): Record<string, unknown> {
   const match: Record<string, unknown> = {}
-  if (m.fromCaste) match['otherDetails.caste'] = m.fromCaste
-  if (m.fromSubCaste) match['otherDetails.subCaste'] = m.fromSubCaste
+  if (m.fromCaste !== undefined) match['otherDetails.caste'] = emptyOrExact(m.fromCaste)
+  if (m.fromSubCaste !== undefined) match['otherDetails.subCaste'] = emptyOrExact(m.fromSubCaste)
   return match
 }
 
+function describeField(val: string | undefined, label: string): string | undefined {
+  if (val === undefined) return undefined
+  return val === '' ? `(no ${label})` : val
+}
+
 function describeFrom(m: Mapping): string {
-  if (m.fromCaste && m.fromSubCaste) return `${m.fromCaste} / ${m.fromSubCaste}`
-  if (m.fromCaste) return m.fromCaste
-  return `(any caste) / ${m.fromSubCaste}`
+  const caste = describeField(m.fromCaste, 'caste')
+  const subCaste = describeField(m.fromSubCaste, 'subCaste')
+  if (caste && subCaste) return `${caste} / ${subCaste}`
+  if (caste) return caste
+  if (subCaste) return `(any caste) / ${subCaste}`
+  return '(any)'
+}
+
+function describeToField(val: string | undefined, label: string): string {
+  if (val === undefined) return `${label} unchanged`
+  return val === '' ? `${label} cleared` : `${label}="${val}"`
 }
 
 function describeTo(m: Mapping): string {
-  const parts: string[] = []
-  parts.push(m.toCaste ? `caste="${m.toCaste}"` : 'caste unchanged')
-  parts.push(m.toSubCaste ? `subCaste="${m.toSubCaste}"` : 'subCaste unchanged')
-  return parts.join(', ')
+  return [describeToField(m.toCaste, 'caste'), describeToField(m.toSubCaste, 'subCaste')].join(', ')
 }
 
 function validateMappings(mappings: unknown): Mapping[] {
@@ -102,16 +122,18 @@ function validateMappings(mappings: unknown): Mapping[] {
     if (typeof m !== 'object' || m === null) throw new Error(`Entry ${i} is not an object`)
     const { fromCaste, fromSubCaste, toCaste, toSubCaste } = m as Record<string, unknown>
 
+    // All four fields may be "" (sentinel: "empty/unset" on the from side, "clear it" on the to side) —
+    // anything else must be a non-empty, non-whitespace string.
     for (const [key, val] of Object.entries({ fromCaste, fromSubCaste, toCaste, toSubCaste })) {
-      if (val !== undefined && (typeof val !== 'string' || !val.trim())) {
-        throw new Error(`Entry ${i}: ${key} must be a non-empty string when present`)
+      if (val !== undefined && (typeof val !== 'string' || (val !== '' && !val.trim()))) {
+        throw new Error(`Entry ${i}: ${key} must be a string ("" allowed) when present`)
       }
     }
 
-    if (!fromCaste && !fromSubCaste) {
+    if (fromCaste === undefined && fromSubCaste === undefined) {
       throw new Error(`Entry ${i}: at least one of fromCaste/fromSubCaste is required to know what to match`)
     }
-    if (!toCaste && !toSubCaste) {
+    if (toCaste === undefined && toSubCaste === undefined) {
       throw new Error(`Entry ${i}: at least one of toCaste/toSubCaste is required to know what to change`)
     }
 
@@ -124,11 +146,32 @@ function validateMappings(mappings: unknown): Mapping[] {
   })
 }
 
+const LARGE_MATCH_WARNING_THRESHOLD = 100
+
+function warnOnChainedEntries(mappings: Mapping[]): void {
+  mappings.forEach((entry, i) => {
+    mappings.forEach((other, j) => {
+      if (i === j) return
+      const casteChains = entry.toCaste !== undefined && entry.toCaste === other.fromCaste
+      const subCasteChains = entry.toSubCaste !== undefined && entry.toSubCaste === other.fromSubCaste
+      if (casteChains || subCasteChains) {
+        console.warn(
+          `[warn] entry #${i} ("${describeFrom(entry)}" -> ${describeTo(entry)}) writes a value ` +
+          `that entry #${j} ("${describeFrom(other)}" -> ${describeTo(other)}) matches on — ` +
+          `if #${i} runs first, #${j} will also catch the users #${i} just updated.`
+        )
+      }
+    })
+  })
+}
+
 async function run() {
   const { input, state: statePath, apply, restart } = resolveArgs()
 
   const mappings = validateMappings(readJsonFile<unknown>(input))
   const state = loadState<CheckpointState>(statePath, restart, { completed: {} })
+
+  warnOnChainedEntries(mappings)
 
   await connectMongo()
   console.log(`Mode: ${apply ? 'APPLY' : 'DRAFT (dry run, no writes)'}`)
@@ -140,7 +183,9 @@ async function run() {
     const from = describeFrom(mapping)
     const to = describeTo(mapping)
 
-    if ((mapping.fromCaste ?? '') === (toCaste ?? '') && (mapping.fromSubCaste ?? '') === (toSubCaste ?? '')) {
+    const casteUnchanged = mapping.fromCaste !== '' && mapping.fromCaste === toCaste
+    const subCasteUnchanged = mapping.fromSubCaste !== '' && mapping.fromSubCaste === toSubCaste
+    if (casteUnchanged && subCasteUnchanged) {
       console.log(`[skip] "${from}" -> no-op (nothing changes)`)
       continue
     }
@@ -162,6 +207,9 @@ async function run() {
 
       console.log(`[draft] "${from}" -> ${to}`)
       console.log(`        matches: ${matchCount}`)
+      if (matchCount > LARGE_MATCH_WARNING_THRESHOLD) {
+        console.log(`        [warn] large match count (>${LARGE_MATCH_WARNING_THRESHOLD}) — double-check this is intended before --apply`)
+      }
       if (sample.length) {
         console.log(`        sample: ${sample.map((u: any) => u.fullName).join(', ')}`)
       }
@@ -177,8 +225,8 @@ async function run() {
 
     try {
       const setStage: Record<string, unknown> = {}
-      if (toCaste) setStage['otherDetails.caste'] = toCaste
-      if (toSubCaste) setStage['otherDetails.subCaste'] = toSubCaste
+      if (toCaste !== undefined) setStage['otherDetails.caste'] = toCaste
+      if (toSubCaste !== undefined) setStage['otherDetails.subCaste'] = toSubCaste
 
       const result = await User.updateMany(
         match,
