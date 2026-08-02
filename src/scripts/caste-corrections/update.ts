@@ -17,6 +17,11 @@
  * Re-running with --apply skips entries already completed. Pass --restart to
  * ignore the checkpoint and re-apply everything.
  *
+ * Undo: every --apply run writes an NDJSON undo log ({ id, caste, subCaste }
+ * per touched user, their values from right before this run's writes) next to
+ * the state file. Revert with:
+ *   npx tsx src/scripts/caste-corrections/revert.ts --undo=<path> --apply
+ *
  * Run (defaults read from this folder):
  *   npx tsx src/scripts/caste-corrections/update.ts                                        # draft (dry run)
  *   npx tsx src/scripts/caste-corrections/update.ts --apply                                 # apply
@@ -24,16 +29,18 @@
  *   npx tsx src/scripts/caste-corrections/update.ts --input=./samples/mapping.json --apply
  */
 
-import 'dotenv/config';
-import mongoose from 'mongoose';
-import { join } from 'path';
-import { dirname } from 'path';
+import { appendFileSync } from 'fs';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import 'dotenv/config';
+
+import { parseArgs, readJsonFile, loadState, saveState } from './helper.js';
 import { connectMongo } from '../../services/connect-mongo.js';
 import { User } from '../../models/index.js';
-import { parseArgs, readJsonFile, loadState, saveState } from './helper.js';
 
 const DIR = dirname(fileURLToPath(import.meta.url))
+const UNDO_BATCH_SIZE = 500
 
 type Mapping = {
   fromCaste?: string
@@ -165,6 +172,38 @@ function warnOnChainedEntries(mappings: Mapping[]): void {
   })
 }
 
+async function captureUndo(match: Record<string, unknown>, undoPath: string): Promise<number> {
+  let lastId: string | null = null
+  let captured = 0
+
+  while (true) {
+    const query: Record<string, unknown> = lastId
+      ? { ...match, _id: { $gt: new mongoose.Types.ObjectId(lastId) } }
+      : match
+    const batch = await User.find(query)
+      .sort({ _id: 1 })
+      .limit(UNDO_BATCH_SIZE)
+      .select('otherDetails.caste otherDetails.subCaste')
+      .lean()
+
+    if (batch.length === 0) break
+
+    const lines = batch.map((u: any) => JSON.stringify({
+      id: u._id.toString(),
+      caste: u.otherDetails?.caste ?? null,
+      subCaste: u.otherDetails?.subCaste ?? null,
+    })).join('\n') + '\n'
+    appendFileSync(undoPath, lines)
+
+    captured += batch.length
+    lastId = batch[batch.length - 1]._id.toString()
+
+    if (batch.length < UNDO_BATCH_SIZE) break
+  }
+
+  return captured
+}
+
 async function run() {
   const { input, state: statePath, apply, restart } = resolveArgs()
 
@@ -176,6 +215,9 @@ async function run() {
   await connectMongo()
   console.log(`Mode: ${apply ? 'APPLY' : 'DRAFT (dry run, no writes)'}`)
   console.log(`${mappings.length} mapping(s) to process\n`)
+
+  const undoPath = apply ? `${statePath}.undo.${Date.now()}.ndjson` : null
+  if (undoPath) console.log(`Undo log: ${undoPath}\n`)
 
   for (const mapping of mappings) {
     const key = keyFor(mapping)
@@ -224,6 +266,9 @@ async function run() {
     }
 
     try {
+      const captured = await captureUndo(match, undoPath as string)
+      console.log(`[apply] "${from}" -> undo captured for ${captured} user(s)`)
+
       const setStage: Record<string, unknown> = {}
       if (toCaste !== undefined) setStage['otherDetails.caste'] = toCaste
       if (toSubCaste !== undefined) setStage['otherDetails.subCaste'] = toSubCaste

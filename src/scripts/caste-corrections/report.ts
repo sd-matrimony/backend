@@ -14,14 +14,15 @@
  *   npx tsx src/scripts/caste-corrections/report.ts --restart
  */
 
-import 'dotenv/config';
-import mongoose from 'mongoose';
 import { existsSync, appendFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import 'dotenv/config';
+
+import { parseArgs, readJsonFile, loadState, saveState } from './helper.js';
 import { connectMongo } from '../../services/connect-mongo.js';
 import { User } from '../../models/index.js';
-import { parseArgs, readJsonFile, loadState, saveState } from './helper.js';
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 const BATCH_SIZE = 500
