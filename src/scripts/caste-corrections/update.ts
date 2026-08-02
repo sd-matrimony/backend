@@ -242,18 +242,10 @@ async function run() {
     const matchCount = await User.countDocuments(match)
 
     if (!apply) {
-      const sample = await User.find(match)
-        .limit(3)
-        .select('fullName otherDetails.caste otherDetails.subCaste')
-        .lean()
-
       console.log(`[draft] "${from}" -> ${to}`)
       console.log(`        matches: ${matchCount}`)
       if (matchCount > LARGE_MATCH_WARNING_THRESHOLD) {
         console.log(`        [warn] large match count (>${LARGE_MATCH_WARNING_THRESHOLD}) — double-check this is intended before --apply`)
-      }
-      if (sample.length) {
-        console.log(`        sample: ${sample.map((u: any) => u.fullName).join(', ')}`)
       }
       continue
     }
