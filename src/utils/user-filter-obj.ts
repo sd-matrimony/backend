@@ -55,6 +55,7 @@ export function getFilterObj(obj: objT) {
     minQualification, sector, profession, minSalary, motherTongue,
     rasi, lagna, nakshatra, maritalStatus, isBlocked, isDeleted,
     caste, subCaste, religion, minAge, maxAge, createdBy, fullName, email, mobile,
+    createdAtFrom, createdAtTo,
   } = obj!
 
   const filter: any = {
@@ -151,6 +152,18 @@ export function getFilterObj(obj: objT) {
 
   if (createdBy) {
     filter.createdBy = createdBy
+  }
+
+  if (createdAtFrom) {
+    const startOfDay = new Date(createdAtFrom)
+    startOfDay.setHours(0, 0, 0, 0)
+    filter.createdAt = { ...filter.createdAt, $gte: startOfDay }
+  }
+
+  if (createdAtTo) {
+    const endOfDay = new Date(createdAtTo)
+    endOfDay.setHours(23, 59, 59, 999)
+    filter.createdAt = { ...filter.createdAt, $lte: endOfDay }
   }
 
   return filter

@@ -35,6 +35,8 @@ export const findUsersSchema = z.object({
   minQualification: educationEnum.optional(),
   email: z.string().optional(),
   mobile: z.string().optional(),
+  createdAtFrom: z.coerce.date().optional(),
+  createdAtTo: z.coerce.date().optional(),
 })
   .refine((data) => {
     if (data.minAge && data.maxAge && data.minAge > data.maxAge) {
@@ -44,6 +46,15 @@ export const findUsersSchema = z.object({
   }, {
     message: "Minimum age must be less than maximum age",
     path: ["minAge"],
+  })
+  .refine((data) => {
+    if (data.createdAtFrom && data.createdAtTo && data.createdAtFrom > data.createdAtTo) {
+      return false
+    }
+    return true
+  }, {
+    message: "Created from date must be before created to date",
+    path: ["createdAtFrom"],
   })
   .optional()
 
