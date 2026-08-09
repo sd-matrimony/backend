@@ -88,7 +88,16 @@ export function getFilterObj(obj: objT) {
   setFilter(filter, "vedicHoroscope.nakshatra", nakshatra, 27)
   setFilter(filter, "vedicHoroscope.rasi", rasi, 12)
   setFilter(filter, "vedicHoroscope.lagna", lagna, 12)
-  setFilter(filter, "otherDetails.caste", caste, Infinity, true)
+  if (caste) {
+    const casteParsed = strOrArr(caste, Infinity)
+    if (casteParsed && casteParsed !== "Any") {
+      filter.$or = [
+        { "otherDetails.caste": regexQuery(casteParsed, true) },
+        { "otherDetails.caste": { $in: [null, "", "Don't wish to specify"] } },
+        { "otherDetails.caste": { $exists: false } },
+      ]
+    }
+  }
   setFilter(filter, "otherDetails.subCaste", subCaste, Infinity, true)
   setFilter(filter, "otherDetails.religion", religion, Infinity, true)
   setFilter(filter, "otherDetails.motherTongue", motherTongue, Infinity, true)
