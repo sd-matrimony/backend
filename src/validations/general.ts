@@ -70,15 +70,15 @@ export const familyDetailsSchema = z.object({
   motherName: z.string("Mother's name is required").min(2, "Mother's name must be at least 2 characters"),
   noOfBrothers: z.number("Number of brothers is required").min(0, "Cannot be negative").default(0),
   noOfSisters: z.number("Number of sisters is required").min(0, "Cannot be negative").default(0),
-  birthOrder: z.number("Birth order is required").min(1, "Birth order must be at least 1").default(1),
+  birthOrder: z.number("Birth order is required").min(0, "Cannot be negative").default(0),
   isFatherAlive: z.boolean("Father's status is required").default(true),
   isMotherAlive: z.boolean("Mother's status is required").default(true),
 }, { error: "Family details are required" })
 
 export const vedicHoroscopeSchema = z.object({
-  rasi: rasiEnum.optional(),
-  lagna: rasiEnum.optional(),
-  nakshatra: nakshatraEnum.optional(),
+  rasi: z.union([rasiEnum, z.literal("")]).optional(),
+  lagna: z.union([rasiEnum, z.literal("")]).optional(),
+  nakshatra: z.union([nakshatraEnum, z.literal("")]).optional(),
   dashaPeriod: z.string().optional(),
   placeOfBirth: z.string().optional(),
   timeOfBirth: z.string().optional(),
