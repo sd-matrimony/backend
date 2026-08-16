@@ -80,7 +80,6 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/
@@ -143,6 +142,5 @@ pnpm-lock.yaml
 package-lock.json
 /uploads
 /test/sample1.png
-/dist
 
 settings.local.json

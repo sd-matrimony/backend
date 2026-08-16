@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import path from 'path';
+import fs from 'fs';
 
 import createRateLimiter from './middlewares/rate-limit.js';
 import authMiddleware from './middlewares/auth.js';
@@ -67,7 +68,10 @@ app.route("/account", accountRoutes)
 
 app.use(createRateLimiter())
 
-app.get("/health", c => c.json({ status: "ok" }))
+app.get("/health", c => {
+  const { version } = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../package.json"), "utf-8"))
+  return c.json({ status: "ok", version })
+})
 
 app.route("/faker", fakerRoutes)
 app.route("/migration", migrationRoutes)

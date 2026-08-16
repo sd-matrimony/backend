@@ -11,9 +11,14 @@
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
     "resolveJsonModule": true,
+    "rootDir": "./src",
     "outDir": "./dist"
   },
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist"
   ]
 }

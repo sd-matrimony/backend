@@ -1,0 +1,238 @@
+/**
+ * Bulk-update user caste/subCaste from a mapping file.
+ * Input: JSON array of { fromCaste?, fromSubCaste?, toCaste?, toSubCaste? }
+ *   - At least one of fromCaste/fromSubCaste is required (what to match on).
+ *   - At least one of toCaste/toSubCaste is required (what to change).
+ *   - fromCaste + fromSubCaste both given -> match users with BOTH.
+ *   - fromCaste/fromSubCaste omitted (key absent) -> that field is NOT part of the match at all.
+ *   - fromCaste/fromSubCaste = "" (explicit empty string) -> matches users where that field is
+ *     empty/unset (null or ""), NOT users who already have a real value there.
+ *   - toCaste/toSubCaste omitted (key absent) -> that field is left untouched.
+ *   - toCaste/toSubCaste = "" (explicit empty string) -> that field is CLEARED (set to "").
+ *
+ * Draft by default (read-only: reports match counts + samples, writes nothing).
+ * Pass --apply to actually perform the updates.
+ *
+ * Resumable: each mapping entry is checkpointed to a state file once applied.
+ * Re-running with --apply skips entries already completed. Pass --restart to
+ * ignore the checkpoint and re-apply everything.
+ *
+ * Undo: every --apply run writes an NDJSON undo log ({ id, caste, subCaste }
+ * per touched user, their values from right before this run's writes) next to
+ * the state file. Revert with:
+ *   npx tsx src/scripts/caste-corrections/revert.ts --undo=<path> --apply
+ *
+ * Run (defaults read from this folder):
+ *   npx tsx src/scripts/caste-corrections/update.ts                                        # draft (dry run)
+ *   npx tsx src/scripts/caste-corrections/update.ts --apply                                 # apply
+ *   npx tsx src/scripts/caste-corrections/update.ts --apply --restart
+ *   npx tsx src/scripts/caste-corrections/update.ts --input=./samples/mapping.json --apply
+ */
+import { appendFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import 'dotenv/config';
+import { parseArgs, readJsonFile, loadState, saveState } from './helper.js';
+import { connectMongo } from '../../services/connect-mongo.js';
+import { User } from '../../models/index.js';
+const DIR = dirname(fileURLToPath(import.meta.url));
+const UNDO_BATCH_SIZE = 500;
+function resolveArgs() {
+    const raw = parseArgs();
+    const input = raw.get('input') || join(DIR, 'samples', 'mapping.json');
+    return {
+        input,
+        state: raw.get('state') || `${input}.state.json`,
+        apply: raw.get('apply') === 'true',
+        restart: raw.get('restart') === 'true',
+    };
+}
+function markFor(v) {
+    return v === undefined ? '·' : v === '' ? '∅' : v;
+}
+function keyFor(m) {
+    return `${markFor(m.fromCaste)}/${markFor(m.fromSubCaste)}=>${markFor(m.toCaste)}/${markFor(m.toSubCaste)}`;
+}
+function emptyOrExact(val) {
+    return val === '' ? { $in: [null, ''] } : val;
+}
+function matchFor(m) {
+    const match = {};
+    if (m.fromCaste !== undefined)
+        match['otherDetails.caste'] = emptyOrExact(m.fromCaste);
+    if (m.fromSubCaste !== undefined)
+        match['otherDetails.subCaste'] = emptyOrExact(m.fromSubCaste);
+    return match;
+}
+function describeField(val, label) {
+    if (val === undefined)
+        return undefined;
+    return val === '' ? `(no ${label})` : val;
+}
+function describeFrom(m) {
+    const caste = describeField(m.fromCaste, 'caste');
+    const subCaste = describeField(m.fromSubCaste, 'subCaste');
+    if (caste && subCaste)
+        return `${caste} / ${subCaste}`;
+    if (caste)
+        return caste;
+    if (subCaste)
+        return `(any caste) / ${subCaste}`;
+    return '(any)';
+}
+function describeToField(val, label) {
+    if (val === undefined)
+        return `${label} unchanged`;
+    return val === '' ? `${label} cleared` : `${label}="${val}"`;
+}
+function describeTo(m) {
+    return [describeToField(m.toCaste, 'caste'), describeToField(m.toSubCaste, 'subCaste')].join(', ');
+}
+function validateMappings(mappings) {
+    if (!Array.isArray(mappings) || mappings.length === 0) {
+        throw new Error('Input JSON must be a non-empty array of { fromCaste?, fromSubCaste?, toCaste?, toSubCaste? }');
+    }
+    return mappings.map((m, i) => {
+        if (typeof m !== 'object' || m === null)
+            throw new Error(`Entry ${i} is not an object`);
+        const { fromCaste, fromSubCaste, toCaste, toSubCaste } = m;
+        // All four fields may be "" (sentinel: "empty/unset" on the from side, "clear it" on the to side) —
+        // anything else must be a non-empty, non-whitespace string.
+        for (const [key, val] of Object.entries({ fromCaste, fromSubCaste, toCaste, toSubCaste })) {
+            if (val !== undefined && (typeof val !== 'string' || (val !== '' && !val.trim()))) {
+                throw new Error(`Entry ${i}: ${key} must be a string ("" allowed) when present`);
+            }
+        }
+        if (fromCaste === undefined && fromSubCaste === undefined) {
+            throw new Error(`Entry ${i}: at least one of fromCaste/fromSubCaste is required to know what to match`);
+        }
+        if (toCaste === undefined && toSubCaste === undefined) {
+            throw new Error(`Entry ${i}: at least one of toCaste/toSubCaste is required to know what to change`);
+        }
+        return {
+            fromCaste: fromCaste,
+            fromSubCaste: fromSubCaste,
+            toCaste: toCaste,
+            toSubCaste: toSubCaste,
+        };
+    });
+}
+const LARGE_MATCH_WARNING_THRESHOLD = 100;
+function warnOnChainedEntries(mappings) {
+    mappings.forEach((entry, i) => {
+        mappings.forEach((other, j) => {
+            if (i === j)
+                return;
+            const casteChains = entry.toCaste !== undefined && entry.toCaste === other.fromCaste;
+            const subCasteChains = entry.toSubCaste !== undefined && entry.toSubCaste === other.fromSubCaste;
+            if (casteChains || subCasteChains) {
+                console.warn(`[warn] entry #${i} ("${describeFrom(entry)}" -> ${describeTo(entry)}) writes a value ` +
+                    `that entry #${j} ("${describeFrom(other)}" -> ${describeTo(other)}) matches on — ` +
+                    `if #${i} runs first, #${j} will also catch the users #${i} just updated.`);
+            }
+        });
+    });
+}
+async function captureUndo(match, undoPath) {
+    let lastId = null;
+    let captured = 0;
+    while (true) {
+        const query = lastId
+            ? { ...match, _id: { $gt: new mongoose.Types.ObjectId(lastId) } }
+            : match;
+        const batch = await User.find(query)
+            .sort({ _id: 1 })
+            .limit(UNDO_BATCH_SIZE)
+            .select('otherDetails.caste otherDetails.subCaste')
+            .lean();
+        if (batch.length === 0)
+            break;
+        const lines = batch.map((u) => JSON.stringify({
+            id: u._id.toString(),
+            caste: u.otherDetails?.caste ?? null,
+            subCaste: u.otherDetails?.subCaste ?? null,
+        })).join('\n') + '\n';
+        appendFileSync(undoPath, lines);
+        captured += batch.length;
+        lastId = batch[batch.length - 1]._id.toString();
+        if (batch.length < UNDO_BATCH_SIZE)
+            break;
+    }
+    return captured;
+}
+async function run() {
+    const { input, state: statePath, apply, restart } = resolveArgs();
+    const mappings = validateMappings(readJsonFile(input));
+    const state = loadState(statePath, restart, { completed: {} });
+    warnOnChainedEntries(mappings);
+    await connectMongo();
+    console.log(`Mode: ${apply ? 'APPLY' : 'DRAFT (dry run, no writes)'}`);
+    console.log(`${mappings.length} mapping(s) to process\n`);
+    const undoPath = apply ? `${statePath}.undo.${Date.now()}.ndjson` : null;
+    if (undoPath)
+        console.log(`Undo log: ${undoPath}\n`);
+    for (const mapping of mappings) {
+        const key = keyFor(mapping);
+        const { toCaste, toSubCaste } = mapping;
+        const from = describeFrom(mapping);
+        const to = describeTo(mapping);
+        const casteUnchanged = mapping.fromCaste !== '' && mapping.fromCaste === toCaste;
+        const subCasteUnchanged = mapping.fromSubCaste !== '' && mapping.fromSubCaste === toSubCaste;
+        if (casteUnchanged && subCasteUnchanged) {
+            console.log(`[skip] "${from}" -> no-op (nothing changes)`);
+            continue;
+        }
+        if (apply && !restart && state.completed[key]) {
+            const prev = state.completed[key];
+            console.log(`[skip] "${from}" -> "${to}" already applied at ${prev.appliedAt} (matched=${prev.matched}, modified=${prev.modified})`);
+            continue;
+        }
+        const match = matchFor(mapping);
+        const matchCount = await User.countDocuments(match);
+        if (!apply) {
+            console.log(`[draft] "${from}" -> ${to}`);
+            console.log(`        matches: ${matchCount}`);
+            if (matchCount > LARGE_MATCH_WARNING_THRESHOLD) {
+                console.log(`        [warn] large match count (>${LARGE_MATCH_WARNING_THRESHOLD}) — double-check this is intended before --apply`);
+            }
+            continue;
+        }
+        if (matchCount === 0) {
+            console.log(`[apply] "${from}" -> no matching users, nothing to do`);
+            state.completed[key] = { key, matched: 0, modified: 0, appliedAt: new Date().toISOString() };
+            saveState(statePath, state);
+            continue;
+        }
+        try {
+            const captured = await captureUndo(match, undoPath);
+            console.log(`[apply] "${from}" -> undo captured for ${captured} user(s)`);
+            const setStage = {};
+            if (toCaste !== undefined)
+                setStage['otherDetails.caste'] = toCaste;
+            if (toSubCaste !== undefined)
+                setStage['otherDetails.subCaste'] = toSubCaste;
+            const result = await User.updateMany(match, [{ $set: setStage }]);
+            console.log(`[apply] "${from}" -> ${to} — matched=${result.matchedCount}, modified=${result.modifiedCount}`);
+            state.completed[key] = {
+                key,
+                matched: result.matchedCount,
+                modified: result.modifiedCount,
+                appliedAt: new Date().toISOString(),
+            };
+            saveState(statePath, state);
+        }
+        catch (err) {
+            console.error(`[error] "${from}" -> "${to}" failed: ${err?.message}`);
+            console.error('Stopping so the failure can be investigated. Re-run with --apply to resume from here.');
+            await mongoose.disconnect();
+            process.exit(1);
+        }
+    }
+    console.log(apply ? '\nDone.' : '\nDraft complete — re-run with --apply to perform these updates.');
+    await mongoose.disconnect();
+}
+run().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});
