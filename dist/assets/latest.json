@@ -1,11 +1,11 @@
 {
-    "castes": "v5/castes.json",
-    "casteMap": "v2/caste-map.json",
-    "educationLevels": "v1/education-levels.json",
-    "professions": "v1/professions.json",
-    "languages": "v1/languages.json",
-    "religions": "v1/religions.json",
-    "sectors": "v1/sectors.json",
-    "nakshatra": "v1/nakshatra.json",
-    "raasi": "v1/raasi.json"
+  "castes": "v5/castes.json",
+  "casteMap": "v2/caste-map.json",
+  "educationLevels": "v1/education-levels.json",
+  "professions": "v1/professions.json",
+  "languages": "v1/languages.json",
+  "religions": "v1/religions.json",
+  "sectors": "v1/sectors.json",
+  "nakshatra": "v1/nakshatra.json",
+  "raasi": "v1/raasi.json"
 }

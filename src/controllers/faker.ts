@@ -17,7 +17,6 @@ import nakshatra from "../assets/v1/nakshatra.json" with { type: "json" };
 import sectors from "../assets/v1/sectors.json" with { type: "json" };
 import castes from "../assets/v4/castes.json" with { type: "json" };
 import raasi from "../assets/v1/raasi.json" with { type: "json" };
-import latest from "../assets/latest.json" with { type: "json" };
 
 import { approvalStatuses, maritalStatuses, genders } from "../utils/index.js";
 import { getImgUrl } from "../services/cloudinary.js";
