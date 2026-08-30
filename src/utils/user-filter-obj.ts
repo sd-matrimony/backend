@@ -90,12 +90,13 @@ export function getFilterObj(obj: objT) {
   setFilter(filter, "vedicHoroscope.lagna", lagna, 12)
   if (caste) {
     const casteParsed = strOrArr(caste, Infinity)
-    if (casteParsed && casteParsed !== "Any") {
-      filter.$or = [
-        { "otherDetails.caste": regexQuery(casteParsed, true) },
-        { "otherDetails.caste": { $in: [null, "", "Don't wish to specify"] } },
-        { "otherDetails.caste": { $exists: false } },
-      ]
+    if (casteParsed) {
+      const casteList = Array.isArray(casteParsed) ? casteParsed : [casteParsed]
+      const wantsEmpty = casteList.some(c => c === "Any" || c === "Don't wish to specify")
+
+      filter["otherDetails.caste"] = wantsEmpty
+        ? { $in: [null, "", "Any", "Don't wish to specify"] }
+        : regexQuery(casteParsed, true)
     }
   }
   setFilter(filter, "otherDetails.subCaste", subCaste, Infinity, true)
