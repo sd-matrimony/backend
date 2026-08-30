@@ -40,7 +40,8 @@ export async function getUsers(c: zContext<{ query: typeof findUsersSchema }>) {
   const numSkip = Number(queries?.skip || 0)
 
   const fullList = await User.find(filters)
-    .select(userSelect + " approvalStatus")
+    .select(userSelect + " approvalStatus currentPlan")
+    .populate("currentPlan", "subscribedTo expiryDate")
     .limit(numLimit)
     .skip(numSkip)
     .sort({ createdAt: -1 })
