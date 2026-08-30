@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 
 import {
-  getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments,
+  getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments,
   getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList,
   getUsersGroupedCount, getAdmins, createAdmin,
   updateAdmin, getUsersInvitations, updateInvited, resetPass,
@@ -23,6 +23,7 @@ const superAdminRoutes = new Hono()
 superAdminRoutes.use(roleCheck(["super-admin"]))
 
 superAdminRoutes
+  .get("/users/count", zv("query", findUsersSchema), getUsersCount)
   .get("/users/paid", zv("query", skipLimitSchema), getPaidUsers)
   .get("/users/assisted-subscribed", zv("query", skipLimitSchema), getAssistedSubscribedUsers)
   .get("/users/all-payments", zv("query", skipLimitSchema), getUsersAllPayments)

@@ -15,6 +15,15 @@ import { onPaid } from "./payment.js";
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt"
 const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
 
+export async function getUsersCount(c: zContext<{ query: typeof findUsersSchema }>) {
+  const queries = c.req.valid("query") || { limit: 10, skip: 0 }
+  const filters = getFilterObj(queries)
+
+  const count = await User.countDocuments(filters)
+
+  return c.json({ count })
+}
+
 export async function getPaidUsers(c: zContext<{ query: typeof skipLimitSchema }>) {
   const { limit, skip } = c.req.valid("query") || { limit: 10, skip: 0 }
 
