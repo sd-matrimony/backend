@@ -1,10 +1,11 @@
 import { Hono } from "hono";
-import { getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, } from "../controllers/super-admin.js";
+import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, } from "../controllers/super-admin.js";
 import { skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema, } from "../validations/index.js";
 import roleCheck from "../middlewares/role-check.js";
 const superAdminRoutes = new Hono();
 superAdminRoutes.use(roleCheck(["super-admin"]));
 superAdminRoutes
+    .get("/users/count", zv("query", findUsersSchema), getUsersCount)
     .get("/users/paid", zv("query", skipLimitSchema), getPaidUsers)
     .get("/users/assisted-subscribed", zv("query", skipLimitSchema), getAssistedSubscribedUsers)
     .get("/users/all-payments", zv("query", skipLimitSchema), getUsersAllPayments)
