@@ -152,6 +152,7 @@ export const userSchema = z.object({
   contactDetails: z.object({
     mobile: mobileSchema.optional(),
     address: z.string().optional(),
+    place: z.string().optional(),
   }).optional(),
 })
   .refine(

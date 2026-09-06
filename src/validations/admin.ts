@@ -82,6 +82,7 @@ export const bulkUpdateUsersSchema = z.array(
       _id: z.string(),
       contactDetails: z.object({
         address: z.string().optional(),
+        place: z.string().optional(),
       }).optional(),
     })
 ).min(1)

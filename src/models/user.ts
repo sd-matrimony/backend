@@ -82,6 +82,7 @@ const userSchema = new Schema({
       trim: true,
     },
     address: String,
+    place: String,
   },
 
   proffessionalDetails: {
