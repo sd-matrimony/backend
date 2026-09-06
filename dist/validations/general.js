@@ -66,6 +66,7 @@ export const vedicHoroscopeSchema = z.object({
 export const otherDetailsSchema = z.object({
     motherTongue: z.string().optional(),
     houseType: z.string().optional(),
+    otherProperties: z.string().optional(),
     religion: z.string().optional(),
     height: z.string().optional(),
     color: z.string().optional(),
@@ -108,7 +109,7 @@ export const userSchema = z.object({
     password: passwordSchema,
     fullName: z.string("Name is required").min(3, "Name must be at least 3 characters"),
     profileImg: z.union([z.url(), z.literal("")]).optional(),
-    hasDisability: z.boolean().optional(),
+    hasDisability: z.boolean("Has disability must be a yes or no answer").default(false),
     otherDetails: otherDetailsSchema,
     maritalStatus: maritalStatusEnum,
     familyDetails: familyDetailsSchema,
@@ -118,6 +119,7 @@ export const userSchema = z.object({
     contactDetails: z.object({
         mobile: mobileSchema.optional(),
         address: z.string().optional(),
+        place: z.string().optional(),
     }).optional(),
 })
     .refine((data) => !!data.email || !!data.contactDetails?.mobile, {

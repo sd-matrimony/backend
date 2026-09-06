@@ -45,6 +45,7 @@ export const updateProfileSchema = userSchema.omit({
     _id: z.string().optional(),
     contactDetails: z.object({
         address: z.string().optional(),
+        place: z.string().optional(),
     }).optional(),
 });
 export const imgUploadSchema = z.object({

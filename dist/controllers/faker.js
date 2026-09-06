@@ -1,4 +1,4 @@
-import { randFullName, randEmail, randPassword, randNumber, randPhoneNumber, randStreetAddress, randBetweenDate, randCompanyName, randWord, randBoolean, randText, rand, } from "@ngneat/falso";
+import { randFullName, randEmail, randPassword, randNumber, randPhoneNumber, randStreetAddress, randBetweenDate, randCompanyName, randWord, randBoolean, randText, randCity, rand, } from "@ngneat/falso";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -49,6 +49,7 @@ const generateRandomUser = async () => {
         contactDetails: {
             mobile: randPhoneNumber({ countryCode: "IN" }),
             address: randStreetAddress(),
+            place: randCity(),
         },
         profileImg,
         proffessionalDetails: {
