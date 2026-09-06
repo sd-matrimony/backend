@@ -142,7 +142,7 @@ export const userSchema = z.object({
   password: passwordSchema,
   fullName: z.string("Name is required").min(3, "Name must be at least 3 characters"),
   profileImg: z.union([z.url(), z.literal("")]).optional(),
-  hasDisability: z.boolean().optional(),
+  hasDisability: z.boolean("Has disability must be a yes or no answer").default(false),
   otherDetails: otherDetailsSchema,
   maritalStatus: maritalStatusEnum,
   familyDetails: familyDetailsSchema,
