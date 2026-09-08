@@ -10,6 +10,7 @@ import type { zContext } from "../types/index.js";
 import { Payment, User, Admin } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
+import { t, tf } from "../utils/i18n.js";
 import { onPaid } from "./payment.js";
 
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt"
@@ -393,7 +394,7 @@ export async function removeUserPlan(c: zContext<{ param: typeof _idParamSchema 
 
   await User.updateOne({ _id }, { $unset: { currentPlan: 1 } })
 
-  return c.json({ message: "Subscription removed successfully" })
+  return c.json({ message: t(c, "subscriptionRemoved") })
 }
 
 export async function updateInvited(c: zContext<{ param: typeof _idParamSchema }>) {
@@ -401,7 +402,7 @@ export async function updateInvited(c: zContext<{ param: typeof _idParamSchema }
 
   await User.updateOne({ _id }, { invited: true })
 
-  return c.json({ message: "User invited successfully" })
+  return c.json({ message: t(c, "userInvited") })
 }
 
 export async function createAdmin(c: zContext<{ json: typeof adminCreateSchema }>) {
@@ -422,7 +423,7 @@ export async function createAdmin(c: zContext<{ json: typeof adminCreateSchema }
     .select("_id")
     .lean()
 
-  if (adminExist) return c.json({ message: "Admin already exists" }, 400)
+  if (adminExist) return c.json({ message: t(c, "adminExists") }, 400)
 
   const hashedPass = await hashPassword(password)
 
@@ -440,7 +441,7 @@ export async function createAdmin(c: zContext<{ json: typeof adminCreateSchema }
 
   await admin.save()
 
-  return c.json({ message: "Admin created successfully" })
+  return c.json({ message: t(c, "adminCreated") })
 }
 
 export async function updateAdmin(c: zContext<{ json: typeof adminUpdateSchema, param: typeof _idParamSchema }>) {
@@ -453,7 +454,7 @@ export async function updateAdmin(c: zContext<{ json: typeof adminUpdateSchema, 
 
   await Admin.updateOne({ _id }, rest)
 
-  return c.json({ message: "Admin details updated successfully" })
+  return c.json({ message: t(c, "adminDetailsUpdated") })
 }
 
 export async function resetPass(c: zContext<{ param: typeof _idParamSchema, json: typeof resetPassByAdminSchema }>) {
@@ -463,7 +464,7 @@ export async function resetPass(c: zContext<{ param: typeof _idParamSchema, json
   const hashedPass = await hashPassword(password)
   await User.updateOne({ _id }, { password: hashedPass })
 
-  return c.json({ message: "Password reset successfully" })
+  return c.json({ message: t(c, "adminPasswordReset") })
 }
 
 export async function getUserCurrentPlan(c: zContext<{ param: typeof _idParamSchema }>) {
@@ -473,7 +474,7 @@ export async function getUserCurrentPlan(c: zContext<{ param: typeof _idParamSch
     .select("currentPlan")
     .populate("currentPlan", "subscribedTo expiryDate")
     .lean()
-  if (!user) return c.json({ message: "User not found" }, 404)
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
 
   return c.json((user as any).currentPlan ?? null)
 }
@@ -503,7 +504,7 @@ export async function updateUserCritical(c: zContext<{ param: typeof _idParamSch
   const { email, mobile, salary } = c.req.valid("json")
 
   const user = await User.findById(_id).select("_id")
-  if (!user) return c.json({ message: "User not found" }, 404)
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
 
   const update: Record<string, any> = {}
   if (email !== undefined) update.email = email
@@ -512,7 +513,7 @@ export async function updateUserCritical(c: zContext<{ param: typeof _idParamSch
 
   await User.updateOne({ _id }, { $set: update })
 
-  return c.json({ message: "User details updated successfully" })
+  return c.json({ message: t(c, "userDetailsUpdated") })
 }
 
 export async function bulkUpdateUsers(c: zContext<{ json: typeof bulkUpdateUsersSchema }>) {
@@ -526,5 +527,5 @@ export async function bulkUpdateUsers(c: zContext<{ json: typeof bulkUpdateUsers
   })) as any[]
 
   await User.bulkWrite(bulkOps)
-  return c.json({ message: `${updates.length} user(s) updated successfully` })
+  return c.json({ message: tf(c, "bulkUsersUpdated", { count: updates.length }) })
 }

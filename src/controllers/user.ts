@@ -6,7 +6,7 @@ import type { zContext } from '../types/index.js';
 import { getImgUrl, deleteImg } from '../services/index.js';
 import { UserAccess, User } from '../models/index.js';
 
-import { getFilterObj } from '../utils/index.js';
+import { getFilterObj, t } from '../utils/index.js';
 
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified"
 const currentPlanSelectFields = "-_id subscribedTo expiryDate"
@@ -217,7 +217,7 @@ export const addLiked = async (c: zContext<{ json: typeof userIdSchema }>) => {
   // const otherType = type === "liked" ? "disliked" : "liked"
   // updateObj.$pull = { [otherType]: userId }
   await User.updateOne({ _id }, updateObj)
-  return c.json({ message: `User added to ${type} list successfully` })
+  return c.json({ message: t(c, "likedAdded") })
 }
 
 export const removeLiked = async (c: zContext<{ json: typeof userIdSchema }>) => {
@@ -226,7 +226,7 @@ export const removeLiked = async (c: zContext<{ json: typeof userIdSchema }>) =>
 
   const type = "liked"
   await User.updateOne({ _id }, { $pull: { [type]: userId } })
-  return c.json({ message: `User removed from ${type} list successfully` })
+  return c.json({ message: t(c, "likedRemoved") })
 }
 
 export const updateProfile = async (c: zContext<{ json: typeof updateProfileSchema }>) => {
@@ -236,7 +236,7 @@ export const updateProfile = async (c: zContext<{ json: typeof updateProfileSche
   const _id = user.role === "user" ? user._id : payload._id
   await User.updateOne({ _id }, payload)
 
-  return c.json({ message: "User details updated successfully" })
+  return c.json({ message: t(c, "userDetailsUpdated") })
 }
 
 export const imgUpload = async (c: zContext<{ form: typeof imgUploadSchema }>) => {
@@ -261,13 +261,13 @@ export const imgUpload = async (c: zContext<{ form: typeof imgUploadSchema }>) =
 
   await User.updateOne({ _id }, updateQuery)
 
-  return c.json({ message: 'User image uploaded successfully' })
+  return c.json({ message: t(c, "userImageUploaded") })
 }
 
 export const imgDelete = async (c: zContext<{ param: typeof _idParamSchema }>) => {
   const { _id } = c.req.valid("param")
   await deleteImg(_id)
-  return c.json({ message: 'Image deleted successfully' })
+  return c.json({ message: t(c, "imageDeleted") })
 }
 
 export const unlockProfile = async (c: zContext<{ json: typeof _idParamSchema }>) => {
@@ -275,7 +275,7 @@ export const unlockProfile = async (c: zContext<{ json: typeof _idParamSchema }>
   const user = c.get("user") as userVarT
 
   const hasFullAccess = await checkUserAccess(user, _id)
-  if (hasFullAccess) return c.json({ message: "You have full access to this profile already" })
+  if (hasFullAccess) return c.json({ message: t(c, "alreadyFullAccess") })
 
   if (user.currentPlan.noOfProfilesCanView !== 999) {
     const unlockedCount = await UserAccess.countDocuments({
@@ -283,7 +283,7 @@ export const unlockProfile = async (c: zContext<{ json: typeof _idParamSchema }>
       payment: user.currentPlan._id
     })
 
-    if (unlockedCount >= user.currentPlan.noOfProfilesCanView) return c.json({ message: "You have reached the limit of unlocked profiles" }, 400)
+    if (unlockedCount >= user.currentPlan.noOfProfilesCanView) return c.json({ message: t(c, "unlockLimitReached") }, 400)
   }
 
   await UserAccess.create({
@@ -293,5 +293,5 @@ export const unlockProfile = async (c: zContext<{ json: typeof _idParamSchema }>
     expiresAt: new Date(user.currentPlan.expiryDate),
   })
 
-  return c.json({ message: "Profile unlocked successfully" })
+  return c.json({ message: t(c, "profileUnlocked") })
 }

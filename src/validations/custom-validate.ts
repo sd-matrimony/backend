@@ -1,16 +1,19 @@
-import type { ValidationTargets } from "hono";
+import type { Context, ValidationTargets } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 
-function formatErrors(error: z.ZodError) {
+import { translateStatic } from "../utils/i18n.js";
+
+function formatErrors(error: z.ZodError, c: Context) {
   const messages: Record<string, string> = {}
   error.issues.forEach(issue => {
     const key = issue.path[0] as string
+    const message = translateStatic(c, issue.message)
     if (messages[key]) {
-      messages[key] = messages[key] + `, ${issue.message}`
+      messages[key] = messages[key] + `, ${message}`
     }
     else {
-      messages[key] = issue.message
+      messages[key] = message
     }
   })
 
@@ -23,7 +26,7 @@ export const zv = <T extends z.ZodType, Target extends keyof ValidationTargets>(
 ) =>
   zValidator(target, schema, (result, c) => {
     if (!result.success) {
-      const messages = formatErrors(result.error as any)
+      const messages = formatErrors(result.error as any, c)
       const message = Object.entries(messages).map(([key, value]) => `${key}: ${value}`).join("; ")
       // const message = Object.values(messages).join("; ")
       return c.json({ message }, 400)

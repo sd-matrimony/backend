@@ -7,6 +7,7 @@ import type { zContext } from '../types/index.js';
 import { assistedPrices, env, extraProfiles, phonepayEndpoints, planPrices, planValidityMonths, profilesCount, type plansT } from '../utils/enums.js';
 import { Payment, User } from '../models/index.js';
 import { redisClient } from '../services/connect-redis.js';
+import { tf } from '../utils/i18n.js';
 
 let cachedToken = ""
 let tokenExpiry = Date.now()
@@ -192,5 +193,5 @@ export const testVerifyPayment = async (c: zContext<{ json: typeof testVerifySch
     return c.json({ message: data?.errorContext?.description || data?.message }, 400)
   }
 
-  return c.json({ message: `Order with id ${orderId} completed successfully` })
+  return c.json({ message: tf(c, "orderCompleted", { orderId }) })
 }

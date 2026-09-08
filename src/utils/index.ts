@@ -4,6 +4,7 @@ export * from "./token.js";
 export * from "./user-filter-obj.js";
 export * from "./image-extractor.js";
 export * from "./cookie.js";
+export * from "./i18n.js";
 
 export function generateOtp() {
   const otp = Math.floor(100000 + Math.random() * 900000)

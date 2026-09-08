@@ -5,7 +5,7 @@ import {
   createUsersSchema, userMarriedToSchema, updateUserSchema,
 } from "../validations/index.js";
 
-import { hashPassword, getFilterObj } from "../utils/index.js";
+import { hashPassword, getFilterObj, t } from "../utils/index.js";
 import { redisClient } from "../services/connect-redis.js";
 import { User } from "../models/index.js";
 
@@ -127,7 +127,7 @@ export async function findUser(c: zContext<{ query: typeof findUserSchema }>) {
   const queries: Record<string, any> = c.req.valid("query") || {}
 
   if (Object.keys(queries).length === 0) {
-    return c.json({ message: "No query parameters provided" }, 400)
+    return c.json({ message: t(c, "noQueryParams") }, 400)
   }
 
   const filters = Object.keys(queries).reduce((acc: Record<string, any>, key) => {
@@ -237,14 +237,14 @@ export async function userMarriedTo(c: zContext<{ json: typeof userMarriedToSche
 
   await User.bulkWrite(payload)
 
-  return c.json({ message: "User married to updated successfully" })
+  return c.json({ message: t(c, "marriedToUpdated") })
 }
 
 export async function updateUser(c: zContext<{ json: typeof updateUserSchema }>) {
   const { _id, ...rest } = c.req.valid("json")
 
   if (Object.keys(rest).length === 0) {
-    return c.json({ message: "No parameters to update" }, 400)
+    return c.json({ message: t(c, "noParamsToUpdate") }, 400)
   }
 
   const user = await User.findOneAndUpdate({ _id }, rest, { new: true })
@@ -253,5 +253,5 @@ export async function updateUser(c: zContext<{ json: typeof updateUserSchema }>)
 
   if (user) await redisClient.del(`${user.role}:${_id}`)
 
-  return c.json({ message: "User details updated successfully" })
+  return c.json({ message: t(c, "userDetailsUpdated") })
 }
