@@ -7,5 +7,16 @@
   "religions": "v1/religions.json",
   "sectors": "v1/sectors.json",
   "nakshatra": "v1/nakshatra.json",
-  "raasi": "v1/raasi.json"
+  "raasi": "v1/raasi.json",
+  "translations": {
+    "ta": {
+      "religions": "v1/ta-religions.json",
+      "educationLevels": "v1/ta-education-levels.json",
+      "sectors": "v1/ta-sectors.json",
+      "languages": "v1/ta-languages.json",
+      "professions": "v1/ta-professions.json",
+      "castes": "v5/ta-castes.json",
+      "subCastes": "v5/ta-caste-map.json"
+    }
+  }
 }

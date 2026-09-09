@@ -1,0 +1,18 @@
+{
+  "Government": "அரசு",
+  "Private": "தனியார்",
+  "IT / Software": "ஐடி / மென்பொருள்",
+  "Self-Employed / Freelance": "சுயதொழில் / ஃப்ரீலான்ஸ்",
+  "Entrepreneur / Business Owner": "தொழில் முனைவோர் / வணிக உரிமையாளர்",
+  "Unemployed": "வேலையில்லாதவர்",
+  "Student": "மாணவர்",
+  "Retired": "ஓய்வு பெற்றவர்",
+  "Homemaker": "இல்லத்தரசி",
+  "Informal Sector": "முறைசாரா துறை",
+  "NGO / Non-Profit": "தன்னார்வ தொண்டு நிறுவனம்",
+  "Agricultural": "விவசாயம்",
+  "Creative / Media / Entertainment": "படைப்பாற்றல் / ஊடகம் / பொழுதுபோக்கு",
+  "Healthcare": "சுகாதாரம்",
+  "Education": "கல்வி",
+  "Other": "மற்றவை"
+}
