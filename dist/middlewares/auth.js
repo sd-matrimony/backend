@@ -1,6 +1,6 @@
 import { JwtTokenExpired } from 'hono/utils/jwt/types';
 import { createMiddleware } from 'hono/factory';
-import { tokenEnums, verifyToken } from '../utils/index.js';
+import { tokenEnums, verifyToken, t } from '../utils/index.js';
 import { redisClient } from '../services/index.js';
 import { Admin, User } from '../models/index.js';
 async function getUser(_id, role) {
@@ -34,23 +34,23 @@ const authMiddleware = createMiddleware(async (c, next) => {
     try {
         const token = c.req.header("Authorization")?.replace('Bearer ', '');
         if (!token)
-            return c.json({ message: 'Unauthorized' }, 401);
+            return c.json({ message: t(c, 'unauthorized') }, 401);
         const { _id, role, type } = await verifyToken(token, tokenEnums.accessToken);
         if (type !== tokenEnums.accessToken)
-            return c.json({ message: 'Invalid token' }, 400);
+            return c.json({ message: t(c, 'invalidToken') }, 400);
         let user = await getUser(_id, role);
         if (!user)
-            return c.json({ message: 'User not found' }, 400);
+            return c.json({ message: t(c, 'userNotFound') }, 400);
         if (user.isDeleted || (user.role === "user" && user.isBlocked))
-            return c.json({ message: 'Access denied' }, 400);
+            return c.json({ message: t(c, 'accessDenied') }, 400);
         c.set("user", user);
         await next();
     }
     catch (error) {
         if (error instanceof JwtTokenExpired) {
-            return c.json({ message: "Token expired" }, 401);
+            return c.json({ message: t(c, 'tokenExpired') }, 401);
         }
-        return c.json({ message: "Invalid token" }, 400);
+        return c.json({ message: t(c, 'invalidToken') }, 400);
     }
 });
 export default authMiddleware;

@@ -1,21 +1,23 @@
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-function formatErrors(error) {
+import { translateStatic } from "../utils/i18n.js";
+function formatErrors(error, c) {
     const messages = {};
     error.issues.forEach(issue => {
         const key = issue.path[0];
+        const message = translateStatic(c, issue.message);
         if (messages[key]) {
-            messages[key] = messages[key] + `, ${issue.message}`;
+            messages[key] = messages[key] + `, ${message}`;
         }
         else {
-            messages[key] = issue.message;
+            messages[key] = message;
         }
     });
     return messages;
 }
 export const zv = (target, schema) => zValidator(target, schema, (result, c) => {
     if (!result.success) {
-        const messages = formatErrors(result.error);
+        const messages = formatErrors(result.error, c);
         const message = Object.entries(messages).map(([key, value]) => `${key}: ${value}`).join("; ");
         // const message = Object.values(messages).join("; ")
         return c.json({ message }, 400);

@@ -1,6 +1,7 @@
 import { Payment, User, Admin } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
+import { t, tf } from "../utils/i18n.js";
 import { onPaid } from "./payment.js";
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt";
 const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary";
@@ -332,12 +333,12 @@ export async function getUsersInvitations(c) {
 export async function removeUserPlan(c) {
     const { _id } = c.req.valid("param");
     await User.updateOne({ _id }, { $unset: { currentPlan: 1 } });
-    return c.json({ message: "Subscription removed successfully" });
+    return c.json({ message: t(c, "subscriptionRemoved") });
 }
 export async function updateInvited(c) {
     const { _id } = c.req.valid("param");
     await User.updateOne({ _id }, { invited: true });
-    return c.json({ message: "User invited successfully" });
+    return c.json({ message: t(c, "userInvited") });
 }
 export async function createAdmin(c) {
     const { email, password, ...rest } = c.req.valid("json");
@@ -355,7 +356,7 @@ export async function createAdmin(c) {
         .select("_id")
         .lean();
     if (adminExist)
-        return c.json({ message: "Admin already exists" }, 400);
+        return c.json({ message: t(c, "adminExists") }, 400);
     const hashedPass = await hashPassword(password);
     const admin = new Admin({
         ...rest,
@@ -369,7 +370,7 @@ export async function createAdmin(c) {
         },
     });
     await admin.save();
-    return c.json({ message: "Admin created successfully" });
+    return c.json({ message: t(c, "adminCreated") });
 }
 export async function updateAdmin(c) {
     const { _id } = c.req.valid("param");
@@ -378,14 +379,14 @@ export async function updateAdmin(c) {
         rest.password = await hashPassword(rest.password);
     }
     await Admin.updateOne({ _id }, rest);
-    return c.json({ message: "Admin details updated successfully" });
+    return c.json({ message: t(c, "adminDetailsUpdated") });
 }
 export async function resetPass(c) {
     const { password } = c.req.valid("json");
     const { _id } = c.req.valid("param");
     const hashedPass = await hashPassword(password);
     await User.updateOne({ _id }, { password: hashedPass });
-    return c.json({ message: "Password reset successfully" });
+    return c.json({ message: t(c, "adminPasswordReset") });
 }
 export async function getUserCurrentPlan(c) {
     const { _id } = c.req.valid("param");
@@ -394,7 +395,7 @@ export async function getUserCurrentPlan(c) {
         .populate("currentPlan", "subscribedTo expiryDate")
         .lean();
     if (!user)
-        return c.json({ message: "User not found" }, 404);
+        return c.json({ message: t(c, "userNotFound") }, 404);
     return c.json(user.currentPlan ?? null);
 }
 export async function makePaymentForUser(c) {
@@ -420,7 +421,7 @@ export async function updateUserCritical(c) {
     const { email, mobile, salary } = c.req.valid("json");
     const user = await User.findById(_id).select("_id");
     if (!user)
-        return c.json({ message: "User not found" }, 404);
+        return c.json({ message: t(c, "userNotFound") }, 404);
     const update = {};
     if (email !== undefined)
         update.email = email;
@@ -429,7 +430,7 @@ export async function updateUserCritical(c) {
     if (salary !== undefined)
         update["proffessionalDetails.salary"] = salary;
     await User.updateOne({ _id }, { $set: update });
-    return c.json({ message: "User details updated successfully" });
+    return c.json({ message: t(c, "userDetailsUpdated") });
 }
 export async function bulkUpdateUsers(c) {
     const updates = c.req.valid("json");
@@ -440,5 +441,5 @@ export async function bulkUpdateUsers(c) {
         }
     }));
     await User.bulkWrite(bulkOps);
-    return c.json({ message: `${updates.length} user(s) updated successfully` });
+    return c.json({ message: tf(c, "bulkUsersUpdated", { count: updates.length }) });
 }

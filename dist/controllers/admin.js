@@ -1,5 +1,5 @@
 import { findUsersSchema, findUserSchema, skipLimitSchema, createUsersSchema, userMarriedToSchema, updateUserSchema, } from "../validations/index.js";
-import { hashPassword, getFilterObj } from "../utils/index.js";
+import { hashPassword, getFilterObj, t } from "../utils/index.js";
 import { redisClient } from "../services/connect-redis.js";
 import { User } from "../models/index.js";
 const userSelect = "_id fullName email contactDetails.mobile profileImg dob gender maritalStatus otherDetails.caste otherDetails.subCaste proffessionalDetails.salary";
@@ -105,7 +105,7 @@ export async function getMarriedUsers(c) {
 export async function findUser(c) {
     const queries = c.req.valid("query") || {};
     if (Object.keys(queries).length === 0) {
-        return c.json({ message: "No query parameters provided" }, 400);
+        return c.json({ message: t(c, "noQueryParams") }, 400);
     }
     const filters = Object.keys(queries).reduce((acc, key) => {
         if (key === "fullName") {
@@ -196,17 +196,17 @@ export async function userMarriedTo(c) {
         }
     }
     await User.bulkWrite(payload);
-    return c.json({ message: "User married to updated successfully" });
+    return c.json({ message: t(c, "marriedToUpdated") });
 }
 export async function updateUser(c) {
     const { _id, ...rest } = c.req.valid("json");
     if (Object.keys(rest).length === 0) {
-        return c.json({ message: "No parameters to update" }, 400);
+        return c.json({ message: t(c, "noParamsToUpdate") }, 400);
     }
     const user = await User.findOneAndUpdate({ _id }, rest, { new: true })
         .select("role")
         .lean();
     if (user)
         await redisClient.del(`${user.role}:${_id}`);
-    return c.json({ message: "User details updated successfully" });
+    return c.json({ message: t(c, "userDetailsUpdated") });
 }

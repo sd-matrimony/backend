@@ -1,4 +1,4 @@
-import { setRefreshTokenCookie, deleteRefreshTokenCookie, comparePasswords, hashPassword, tokenEnums, generateOtp, getToken, verifyToken, isEmail, env, } from '../utils/index.js';
+import { setRefreshTokenCookie, deleteRefreshTokenCookie, comparePasswords, hashPassword, tokenEnums, generateOtp, getToken, verifyToken, isEmail, env, t, } from '../utils/index.js';
 import { registerSchema, loginSchema, refreshTokenSchema, forgotPassSchema, resetPassSchema, updatePasswordSchema, resendVerifyEmailSchema, verifyAccountSchema, registerImageSchema, emailSchemaObj, mobileSchemaObj, } from '../validations/index.js';
 import { welcome, resendVerifyEmail as resendVerifyEmailTemp, forgotPass } from '../mail-templates/index.js';
 import { claimImage, getImgUrl, transporter } from '../services/index.js';
@@ -26,7 +26,7 @@ export const register = async (c) => {
     }
     const userExist = await Model.findOne(findBy).select('_id email contactDetails').lean();
     if (userExist)
-        return c.json({ message: 'Email or Moboile number already exists' }, 400);
+        return c.json({ message: t(c, 'emailOrMobileExists') }, 400);
     const hashedPass = await hashPassword(password);
     const user = new Model({
         ...rest,
@@ -64,7 +64,7 @@ export const register = async (c) => {
             console.log("welcome mail error", error);
         }
     }
-    return c.json({ message: 'User saved successfully' });
+    return c.json({ message: t(c, 'userSaved') });
 };
 export const login = async (c) => {
     const { email, password, role = "user" } = c.req.valid("json");
@@ -82,10 +82,10 @@ export const login = async (c) => {
             .lean();
     }
     if (!user)
-        return c.json({ message: 'Cannot find user in db' }, 401);
+        return c.json({ message: t(c, 'cannotFindUser') }, 401);
     const result = await comparePasswords(password, user.password);
     if (!result)
-        return c.json({ message: 'Password not matched' }, 400);
+        return c.json({ message: t(c, 'passwordNotMatched') }, 400);
     const payload = { _id: user._id.toString(), role: user.role };
     if (payload.role === "user") {
         payload.approvalStatus = user.approvalStatus;
@@ -122,13 +122,13 @@ export async function accessToken(c) {
     const refresh_token = c.req.valid("cookie")[tokenEnums.refreshToken];
     const { _id, role, type } = await verifyToken(refresh_token, tokenEnums.refreshToken);
     if (type !== tokenEnums.refreshToken)
-        return c.json({ message: 'Invalid token' }, 400);
+        return c.json({ message: t(c, 'invalidToken') }, 400);
     const Model = getModel(role);
     const user = await Model.findOne({ _id, refreshTokens: refresh_token })
         .select("_id role approvalStatus")
         .lean();
     if (!user)
-        return c.json({ message: 'Invalid refresh token or User not found' }, 400);
+        return c.json({ message: t(c, 'invalidRefreshToken') }, 400);
     const payload = { _id: user._id.toString(), role: user.role };
     if (payload.role === "user") {
         payload.approvalStatus = user.approvalStatus;
@@ -142,7 +142,7 @@ export async function forgetPass(c) {
     const findBy = isEmail(email) ? { email } : { "contactDetails.mobile": email };
     const user = await Model.findOne(findBy).select("_id").lean();
     if (!user)
-        return c.json({ message: 'User not found' }, 400);
+        return c.json({ message: t(c, 'userNotFound') }, 400);
     const verifiyOtp = generateOtp();
     await Model.updateOne({ _id: user._id }, { verifiyOtp });
     if (isEmail(email)) {
@@ -159,7 +159,7 @@ export async function forgetPass(c) {
             console.log("forgot-pass", error);
         }
     }
-    return c.json({ message: "Passkey sent to email successfully" });
+    return c.json({ message: t(c, 'passkeySent') });
 }
 export async function resetPass(c) {
     const { email, password, otp, role = "user" } = c.req.valid("json");
@@ -167,27 +167,27 @@ export async function resetPass(c) {
     const findBy = isEmail(email) ? { email } : { "contactDetails.mobile": email };
     const user = await Model.findOne(findBy).select("_id verifiyOtp").lean();
     if (!user)
-        return c.json({ message: 'User not found' }, 400);
+        return c.json({ message: t(c, 'userNotFound') }, 400);
     if (!password)
-        return c.json({ message: "Password shouldn't be empty" }, 400);
+        return c.json({ message: t(c, 'passwordEmpty') }, 400);
     if (Number(otp) !== user.verifiyOtp)
-        return c.json({ message: 'OTP not matched' }, 400);
+        return c.json({ message: t(c, 'otpNotMatched') }, 400);
     const hashedPass = await hashPassword(password);
     await Model.updateOne({ _id: user._id }, {
         password: hashedPass,
         verifiyOtp: undefined
     });
-    return c.json({ message: "Password reseted successfully" });
+    return c.json({ message: t(c, 'passwordReset') });
 }
 export async function verifyAccount(c) {
     const { token } = c.req.valid("json");
     const { _id, role, type } = await verifyToken(token, tokenEnums.verifyToken);
     if (type !== tokenEnums.verifyToken)
-        return c.json({ message: 'Invalid token' }, 400);
+        return c.json({ message: t(c, 'invalidToken') }, 400);
     const Model = getModel(role);
     const user = await Model.findOne({ _id }).select("_id email").lean();
     if (!user)
-        return c.json({ message: 'User not found' }, 400);
+        return c.json({ message: t(c, 'userNotFound') }, 400);
     await Model.updateOne({ _id }, { isVerified: true });
     return c.json({ role });
 }
@@ -197,7 +197,7 @@ export async function resendVerifyEmail(c) {
     const Model = getModel(role);
     const user = await Model.findOne({ email }).select("_id role").lean();
     if (!user)
-        return c.json({ message: 'User not found' }, 400);
+        return c.json({ message: t(c, 'userNotFound') }, 400);
     const { subject, html } = await resendVerifyEmailTemp(user._id.toString(), user.role);
     try {
         await transporter.sendMail({
@@ -210,7 +210,7 @@ export async function resendVerifyEmail(c) {
     catch (error) {
         console.log("resend-verify", error);
     }
-    return c.json({ message: "Verification email sent successfully" });
+    return c.json({ message: t(c, 'verificationEmailSent') });
 }
 export const imgUpload = async (c) => {
     const { image } = c.req.valid("form");
@@ -232,12 +232,12 @@ export const approvalStatusRefresh = async (c) => {
             .lean();
     }
     if (!user)
-        return c.json({ message: 'Cannot find user in db' }, 401);
+        return c.json({ message: t(c, 'cannotFindUser') }, 401);
     if (user.approvalStatus === "pending") {
-        return c.json({ message: "Account not approved yet" }, 400);
+        return c.json({ message: t(c, 'accountNotApproved') }, 400);
     }
     if (user.approvalStatus === "rejected") {
-        return c.json({ message: "Account rejected" }, 400);
+        return c.json({ message: t(c, 'accountRejected') }, 400);
     }
     const payload = { _id: user._id.toString(), role: user.role };
     if (payload.role === "user") {
@@ -301,17 +301,17 @@ export const updatePassword = async (c) => {
     const { oldPassword, newPassword } = c.req.valid("json");
     const { _id, role } = c.get('user');
     if (oldPassword === newPassword)
-        return c.json({ message: 'New password should be different from old password' }, 400);
+        return c.json({ message: t(c, 'samePassword') }, 400);
     const Model = getModel(role);
     const user = await Model.findById(_id).select("password").lean();
     if (!user)
-        return c.json({ message: 'User not found' }, 400);
+        return c.json({ message: t(c, 'userNotFound') }, 400);
     const result = await comparePasswords(oldPassword, user.password);
     if (!result)
-        return c.json({ message: 'Password not matched' }, 400);
+        return c.json({ message: t(c, 'passwordNotMatched') }, 400);
     const password = await hashPassword(newPassword);
     await Model.updateOne({ _id }, { password });
-    return c.json({ message: 'Password updated successfully' });
+    return c.json({ message: t(c, 'passwordUpdated') });
 };
 export const logout = async (c) => {
     const refresh_token = c.req.valid("cookie")[tokenEnums.refreshToken];
@@ -321,7 +321,7 @@ export const logout = async (c) => {
         $pull: { refreshTokens: refresh_token }
     });
     deleteRefreshTokenCookie(c);
-    return c.json({ message: 'User logged out successfully' });
+    return c.json({ message: t(c, 'loggedOut') });
 };
 export const emailUpdate = async (c) => {
     const { email } = c.req.valid("json");
@@ -329,7 +329,7 @@ export const emailUpdate = async (c) => {
     const Model = getModel(user.role);
     const isAlreadyExists = await Model.findOne({ email }).select("_id email").lean();
     if (isAlreadyExists)
-        return c.json({ message: "Email already exists" });
+        return c.json({ message: t(c, 'emailExists') });
     await Model.updateOne({ _id: user._id }, { email, isVerified: false });
     const { subject, html } = await resendVerifyEmailTemp(user._id.toString(), user.role);
     try {
@@ -343,7 +343,7 @@ export const emailUpdate = async (c) => {
     catch (error) {
         console.log("resend-verify", error);
     }
-    return c.json({ message: "Email updated successfully" });
+    return c.json({ message: t(c, 'emailUpdated') });
 };
 export const mobileUpdate = async (c) => {
     const { mobile } = c.req.valid("json");
@@ -351,9 +351,9 @@ export const mobileUpdate = async (c) => {
     const Model = getModel(user.role);
     const isAlreadyExists = await Model.findOne({ "contactDetails.mobile": mobile }).select("_id contactDetails.mobile").lean();
     if (isAlreadyExists)
-        return c.json({ message: "Mobile number already exists" });
+        return c.json({ message: t(c, 'mobileExists') });
     await Model.updateOne({ _id: user._id }, {
         "contactDetails.mobile": mobile
     });
-    return c.json({ message: "Mobile number updated successfully" });
+    return c.json({ message: t(c, 'mobileUpdated') });
 };

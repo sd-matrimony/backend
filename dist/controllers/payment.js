@@ -3,6 +3,7 @@ import { z } from "zod";
 import { assistedPrices, env, extraProfiles, phonepayEndpoints, planPrices, planValidityMonths, profilesCount } from '../utils/enums.js';
 import { Payment, User } from '../models/index.js';
 import { redisClient } from '../services/connect-redis.js';
+import { tf } from '../utils/i18n.js';
 let cachedToken = "";
 let tokenExpiry = Date.now();
 async function getToken() {
@@ -148,5 +149,5 @@ export const testVerifyPayment = async (c) => {
     if (data.state !== "COMPLETED") {
         return c.json({ message: data?.errorContext?.description || data?.message }, 400);
     }
-    return c.json({ message: `Order with id ${orderId} completed successfully` });
+    return c.json({ message: tf(c, "orderCompleted", { orderId }) });
 };

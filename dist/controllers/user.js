@@ -1,6 +1,6 @@
 import { getImgUrl, deleteImg } from '../services/index.js';
 import { UserAccess, User } from '../models/index.js';
-import { getFilterObj } from '../utils/index.js';
+import { getFilterObj, t } from '../utils/index.js';
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified";
 const currentPlanSelectFields = "-_id subscribedTo expiryDate";
 async function checkUserAccess(user, _id) {
@@ -174,21 +174,21 @@ export const addLiked = async (c) => {
     // const otherType = type === "liked" ? "disliked" : "liked"
     // updateObj.$pull = { [otherType]: userId }
     await User.updateOne({ _id }, updateObj);
-    return c.json({ message: `User added to ${type} list successfully` });
+    return c.json({ message: t(c, "likedAdded") });
 };
 export const removeLiked = async (c) => {
     const { userId } = c.req.valid("json");
     const { _id } = c.get("user");
     const type = "liked";
     await User.updateOne({ _id }, { $pull: { [type]: userId } });
-    return c.json({ message: `User removed from ${type} list successfully` });
+    return c.json({ message: t(c, "likedRemoved") });
 };
 export const updateProfile = async (c) => {
     const payload = c.req.valid("json");
     const user = c.get("user");
     const _id = user.role === "user" ? user._id : payload._id;
     await User.updateOne({ _id }, payload);
-    return c.json({ message: "User details updated successfully" });
+    return c.json({ message: t(c, "userDetailsUpdated") });
 };
 export const imgUpload = async (c) => {
     const formData = c.req.valid("form");
@@ -206,26 +206,26 @@ export const imgUpload = async (c) => {
         updateQuery.profileImg = uploadedImages[0];
     }
     await User.updateOne({ _id }, updateQuery);
-    return c.json({ message: 'User image uploaded successfully' });
+    return c.json({ message: t(c, "userImageUploaded") });
 };
 export const imgDelete = async (c) => {
     const { _id } = c.req.valid("param");
     await deleteImg(_id);
-    return c.json({ message: 'Image deleted successfully' });
+    return c.json({ message: t(c, "imageDeleted") });
 };
 export const unlockProfile = async (c) => {
     const { _id } = c.req.valid("json");
     const user = c.get("user");
     const hasFullAccess = await checkUserAccess(user, _id);
     if (hasFullAccess)
-        return c.json({ message: "You have full access to this profile already" });
+        return c.json({ message: t(c, "alreadyFullAccess") });
     if (user.currentPlan.noOfProfilesCanView !== 999) {
         const unlockedCount = await UserAccess.countDocuments({
             viewer: user._id,
             payment: user.currentPlan._id
         });
         if (unlockedCount >= user.currentPlan.noOfProfilesCanView)
-            return c.json({ message: "You have reached the limit of unlocked profiles" }, 400);
+            return c.json({ message: t(c, "unlockLimitReached") }, 400);
     }
     await UserAccess.create({
         viewer: user._id,
@@ -233,5 +233,5 @@ export const unlockProfile = async (c) => {
         payment: user.currentPlan._id,
         expiresAt: new Date(user.currentPlan.expiryDate),
     });
-    return c.json({ message: "Profile unlocked successfully" });
+    return c.json({ message: t(c, "profileUnlocked") });
 };
