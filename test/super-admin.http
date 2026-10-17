@@ -2,6 +2,16 @@
 @token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3ODEzMzY0NzEsIl9pZCI6IjY5Y2NmZGE2NzU2MjkyMDYzYTI2NDZhNiIsInJvbGUiOiJzdXBlci1hZG1pbiJ9.0CNWRe9B7gtsTS4PIaHKqDOyPAg7CoGaFmITYAUjBNY
 
 
+### dashboard stats
+GET {{host}}/stats
+Authorization: {{token}}
+
+
+### active users --- days=1|7|30&limit=4&skip=0
+GET {{host}}/users/active?days=7
+Authorization: {{token}}
+
+
 ### paid users --- limit=4&skip=20
 GET {{host}}/users/paid
 Authorization: {{token}}

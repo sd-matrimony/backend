@@ -4,6 +4,7 @@ import type {
   skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema,
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
   resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
+  activeUsersSchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
@@ -23,6 +24,64 @@ export async function getUsersCount(c: zContext<{ query: typeof findUsersSchema 
   const count = await User.countDocuments(filters)
 
   return c.json({ count })
+}
+
+function daysAgo(days: number) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+}
+
+export async function getDashboardStats(c: Context<Env>) {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const [revenue, totalUsers, activeToday, active7d, active30d] = await Promise.all([
+    Payment.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$amount" },
+          count: { $sum: 1 },
+          online: {
+            $sum: { $cond: [{ $regexMatch: { input: "$orderId", regex: /^by-admin-/ } }, 0, "$amount"] }
+          },
+          byAdmin: {
+            $sum: { $cond: [{ $regexMatch: { input: "$orderId", regex: /^by-admin-/ } }, "$amount", 0] }
+          },
+          thisMonth: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, "$amount", 0] }
+          },
+          today: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, "$amount", 0] }
+          },
+        }
+      }
+    ]),
+    User.countDocuments({ isDeleted: { $ne: true } }),
+    User.countDocuments({ lastActiveAt: { $gte: daysAgo(1) } }),
+    User.countDocuments({ lastActiveAt: { $gte: daysAgo(7) } }),
+    User.countDocuments({ lastActiveAt: { $gte: daysAgo(30) } }),
+  ])
+
+  const { total = 0, count = 0, online = 0, byAdmin = 0, thisMonth = 0, today = 0 } = revenue[0] || {}
+
+  return c.json({
+    revenue: { total, count, online, byAdmin, thisMonth, today },
+    users: { total: totalUsers, activeToday, active7d, active30d },
+  })
+}
+
+export async function getActiveUsers(c: zContext<{ query: typeof activeUsersSchema }>) {
+  const { skip, limit, days } = c.req.valid("query")
+
+  const users = await User.find({ lastActiveAt: { $gte: daysAgo(days) } })
+    .select(`${userSelectFields} lastActiveAt lastLoginAt`)
+    .sort({ lastActiveAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean()
+
+  return c.json(users)
 }
 
 export async function getPaidUsers(c: zContext<{ query: typeof skipLimitSchema }>) {

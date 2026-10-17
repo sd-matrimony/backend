@@ -6,7 +6,7 @@ import {
   getUsersGroupedCount, getAdmins, createAdmin,
   updateAdmin, getUsersInvitations, updateInvited, resetPass,
   makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
-  updateUserCritical,
+  updateUserCritical, getDashboardStats, getActiveUsers,
 } from "../controllers/super-admin.js";
 
 import {
@@ -14,6 +14,7 @@ import {
   _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema,
   usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema,
   mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
+  activeUsersSchema,
 } from "../validations/index.js";
 
 import roleCheck from "../middlewares/role-check.js";
@@ -23,6 +24,8 @@ const superAdminRoutes = new Hono()
 superAdminRoutes.use(roleCheck(["super-admin"]))
 
 superAdminRoutes
+  .get("/stats", getDashboardStats)
+  .get("/users/active", zv("query", activeUsersSchema), getActiveUsers)
   .get("/users/count", zv("query", findUsersSchema), getUsersCount)
   .get("/users/paid", zv("query", skipLimitSchema), getPaidUsers)
   .get("/users/assisted-subscribed", zv("query", skipLimitSchema), getAssistedSubscribedUsers)
