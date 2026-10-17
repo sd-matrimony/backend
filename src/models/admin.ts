@@ -58,6 +58,10 @@ const adminSchema = new Schema({
     default: false,
   },
 
+  lastLoginAt: Date,
+
+  lastActiveAt: Date,
+
 }, { timestamps: true })
 
 adminSchema.pre('validate', function (next) {

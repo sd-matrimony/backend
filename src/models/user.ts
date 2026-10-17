@@ -193,7 +193,14 @@ const userSchema = new Schema({
   invited: {
     type: Boolean,
     default: false,
-  }
+  },
+
+  lastLoginAt: Date,
+
+  lastActiveAt: {
+    type: Date,
+    index: true,
+  },
 
 }, { timestamps: true })
 

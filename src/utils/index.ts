@@ -17,6 +17,12 @@ export function isEmail(email: string) {
   return emailRegex.test(email)
 }
 
+export function maskEmail(email: string) {
+  const [name, domain] = email.split("@")
+  const visible = name.slice(0, Math.min(2, name.length))
+  return `${visible}${"*".repeat(Math.max(name.length - visible.length, 3))}@${domain}`
+}
+
 export const MIN_AGE = 18
 
 export function isValidDob(val: string | Date) {

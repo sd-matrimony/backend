@@ -6,7 +6,7 @@ import {
   setRefreshTokenCookie, deleteRefreshTokenCookie,
   comparePasswords, hashPassword, tokenEnums,
   generateOtp, getToken, verifyToken,
-  isEmail, env, t,
+  isEmail, maskEmail, env, t, tf,
 } from '../utils/index.js';
 
 import {
@@ -128,7 +128,9 @@ export const login = async (c: zContext<{ json: typeof loginSchema }>) => {
   const access_token = await getToken(payload, tokenEnums.accessToken)
 
   const Model = getModel(role)
+  const now = new Date()
   await Model.updateOne({ _id: user._id }, {
+    $set: { lastLoginAt: now, lastActiveAt: now },
     $push: {
       refreshTokens: {
         $each: [refresh_token],
@@ -180,6 +182,8 @@ export async function accessToken(c: zContext<{ cookie: typeof refreshTokenSchem
 
   const access_token = await getToken(payload, tokenEnums.accessToken)
 
+  await Model.updateOne({ _id: user._id }, { lastActiveAt: new Date() })
+
   return c.json({ access_token })
 }
 
@@ -188,29 +192,30 @@ export async function forgetPass(c: zContext<{ json: typeof forgotPassSchema }>)
 
   const Model = getModel(role)
   const findBy = isEmail(email) ? { email } : { "contactDetails.mobile": email }
-  const user = await Model.findOne(findBy).select("_id").lean()
+  const user = await Model.findOne(findBy).select("_id email").lean()
 
   if (!user) return c.json({ message: t(c, 'userNotFound') }, 400)
+  if (!user.email) return c.json({ message: t(c, 'onlyMobileLinked') }, 400)
 
   const verifiyOtp = generateOtp()
 
   await Model.updateOne({ _id: user._id }, { verifiyOtp })
 
-  if (isEmail(email)) {
-    const { subject, html } = forgotPass(verifiyOtp)
-    try {
-      await transporter.sendMail({
-        to: email,
-        from: env.EMAIL_ID,
-        subject,
-        html
-      })
-    } catch (error) {
-      console.log("forgot-pass", error)
-    }
+  const { subject, html } = forgotPass(verifiyOtp)
+  try {
+    await transporter.sendMail({
+      to: user.email,
+      from: env.EMAIL_ID,
+      subject,
+      html
+    })
+  } catch (error) {
+    console.log("forgot-pass", error)
   }
 
-  return c.json({ message: t(c, 'passkeySent') })
+  if (isEmail(email)) return c.json({ message: t(c, 'passkeySent') })
+
+  return c.json({ message: tf(c, 'passkeySentToLinkedEmail', { email: maskEmail(user.email) }) })
 }
 
 export async function resetPass(c: zContext<{ json: typeof resetPassSchema }>) {
@@ -421,7 +426,7 @@ export const emailUpdate = async (c: zContext<{ json: typeof emailSchemaObj }>) 
   const Model = getModel(user.role)
 
   const isAlreadyExists = await Model.findOne({ email }).select("_id email").lean()
-  if (isAlreadyExists) return c.json({ message: t(c, 'emailExists') })
+  if (isAlreadyExists) return c.json({ message: t(c, 'emailExists') }, 400)
 
   await Model.updateOne({ _id: user._id }, { email, isVerified: false })
 
@@ -447,7 +452,7 @@ export const mobileUpdate = async (c: zContext<{ json: typeof mobileSchemaObj }>
   const Model = getModel(user.role)
 
   const isAlreadyExists = await Model.findOne({ "contactDetails.mobile": mobile }).select("_id contactDetails.mobile").lean()
-  if (isAlreadyExists) return c.json({ message: t(c, 'mobileExists') })
+  if (isAlreadyExists) return c.json({ message: t(c, 'mobileExists') }, 400)
 
   await Model.updateOne({ _id: user._id }, {
     "contactDetails.mobile": mobile

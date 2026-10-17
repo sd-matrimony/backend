@@ -12,6 +12,8 @@ type commonFields = {
   isVerified: boolean
   verifiyOtp: number | undefined
   refreshTokens: string[]
+  lastLoginAt?: Date
+  lastActiveAt?: Date
   contactDetails: {
     mobile: string
   }
