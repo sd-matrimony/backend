@@ -52,6 +52,31 @@ Content-Type: application/json
 }
 
 
+### get hidden profiles ?limit=4&skip=0
+GET {{host}}/hidden-list
+Authorization: {{token}}
+
+
+### hide profile (not interested)
+POST {{host}}/hide
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "688a1171e775c818c4d99d15"
+}
+
+
+### unhide profile
+POST {{host}}/unhide
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "userId": "688a1171e775c818c4d99d15"
+}
+
+
 ### update profile details
 PUT {{host}}/profile
 Authorization: {{token}}

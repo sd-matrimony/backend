@@ -62,6 +62,9 @@ const en = {
 
   likedAdded: "User added to liked list successfully",
   likedRemoved: "User removed from liked list successfully",
+  profileHidden: "Profile hidden from your feed",
+  profileUnhidden: "Profile restored to your feed",
+  cannotHideSelf: "You cannot hide your own profile",
   bulkUsersUpdated: "{count} user(s) updated successfully",
   orderCompleted: "Order with id {orderId} completed successfully",
   internalServerError: "Internal server error",
@@ -123,6 +126,9 @@ const ta: Record<MessageKey, string> = {
 
   likedAdded: "பயனர் பிடித்தவை பட்டியலில் சேர்க்கப்பட்டார்",
   likedRemoved: "பயனர் பிடித்தவை பட்டியலிலிருந்து நீக்கப்பட்டார்",
+  profileHidden: "சுயவிவரம் உங்கள் பட்டியலிலிருந்து மறைக்கப்பட்டது",
+  profileUnhidden: "சுயவிவரம் உங்கள் பட்டியலில் மீண்டும் சேர்க்கப்பட்டது",
+  cannotHideSelf: "உங்கள் சொந்த சுயவிவரத்தை மறைக்க முடியாது",
   bulkUsersUpdated: "{count} பயனர்(கள்) புதுப்பிக்கப்பட்டனர்",
   orderCompleted: "ஆர்டர் ஐடி {orderId} வெற்றிகரமாக முடிந்தது",
   internalServerError: "உள் சேவையக பிழை",

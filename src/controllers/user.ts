@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
+import { Types } from 'mongoose';
 
-import type { _idParamSchema, imgUploadSchema, matchedUsersSchema, skipLimitSchema, updateProfileSchema, userIdSchema } from '../validations/index.js';
+import type { _idParamSchema, imgUploadSchema, matchedUsersSchema, skipLimitSchema, updateProfileSchema, userIdSchema, hideProfileSchema } from '../validations/index.js';
 import type { zContext } from '../types/index.js';
 
 import { getImgUrl, deleteImg } from '../services/index.js';
@@ -10,6 +11,13 @@ import { getFilterObj, t } from '../utils/index.js';
 
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified"
 const currentPlanSelectFields = "-_id subscribedTo expiryDate"
+
+function withHiddenFlag<T>(profiles: T[], hidden: Types.ObjectId[]) {
+  const hiddenIds = new Set(hidden.map(String))
+  return profiles
+    .filter(Boolean)
+    .map(profile => ({ ...profile, isHidden: hiddenIds.has(String((profile as { _id: unknown })._id)) }))
+}
 
 async function checkUserAccess(user: any, _id: string) {
   const isOwner = user._id.toString() === _id
@@ -34,7 +42,7 @@ export const getUserDetails = async (c: zContext<{ param: typeof _idParamSchema 
 
   const hasFullAccess = await checkUserAccess(user, _id)
 
-  let select = "-refreshTokens -password -liked -verifiyOtp -role -brokerAppointed -approvalStatus -email"
+  let select = "-refreshTokens -password -liked -hidden -verifiyOtp -role -brokerAppointed -approvalStatus -email"
 
   if (!hasFullAccess) {
     select += " -contactDetails -vedicHoroscope.vedicHoroscopePic"
@@ -114,8 +122,9 @@ export const getMatches = async (c: zContext<{ query: typeof matchedUsersSchema 
   const filters = getFilterObj({ ...rest, ...payload })
 
   const liked = user?.liked || []
+  const hidden = user?.hidden || []
 
-  const baseFilters = { ...filters, _id: { $ne: _id } }
+  const baseFilters = { ...filters, _id: { $nin: [...hidden, new Types.ObjectId(_id)] } }
   const select = userSelectFields.split(" ").reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
   const final = await User.aggregate([
     { $match: baseFilters },
@@ -165,7 +174,7 @@ export const getLikesList = async (c: zContext<{ query: typeof skipLimitSchema }
 
   const type = 'liked'
   const list = await User.findOne({ _id })
-    .select(type)
+    .select(`${type} hidden`)
     .populate({
       path: type,
       select: userSelectFields,
@@ -182,7 +191,7 @@ export const getLikesList = async (c: zContext<{ query: typeof skipLimitSchema }
     .lean()
 
   // @ts-ignore
-  return c.json(list?.[type] || [])
+  return c.json(withHiddenFlag(list?.[type] || [], list?.hidden || []))
 }
 
 export const getUnlockedProfiles = async (c: Context<Env>) => {
@@ -203,7 +212,8 @@ export const getUnlockedProfiles = async (c: Context<Env>) => {
     .sort({ createdAt: -1 })
     .lean()
 
-  const payload = list.map((item) => item.viewed)
+  const me = await User.findById(_id).select("hidden").lean()
+  const payload = withHiddenFlag(list.map((item) => item.viewed), me?.hidden || [])
 
   return c.json(payload)
 }
@@ -214,8 +224,6 @@ export const addLiked = async (c: zContext<{ json: typeof userIdSchema }>) => {
 
   const type = "liked"
   const updateObj: any = { $push: { [type]: userId } }
-  // const otherType = type === "liked" ? "disliked" : "liked"
-  // updateObj.$pull = { [otherType]: userId }
   await User.updateOne({ _id }, updateObj)
   return c.json({ message: t(c, "likedAdded") })
 }
@@ -227,6 +235,47 @@ export const removeLiked = async (c: zContext<{ json: typeof userIdSchema }>) =>
   const type = "liked"
   await User.updateOne({ _id }, { $pull: { [type]: userId } })
   return c.json({ message: t(c, "likedRemoved") })
+}
+
+export const getHiddenList = async (c: zContext<{ query: typeof skipLimitSchema }>) => {
+  const { limit, skip } = c.req.valid("query") || { limit: 10, skip: 0 }
+  const { _id } = c.get("user")
+
+  const user = await User.findOne({ _id })
+    .select("hidden")
+    .populate({
+      path: "hidden",
+      select: userSelectFields,
+      options: {
+        limit: Number(limit || 10),
+        skip: Number(skip || 0),
+      },
+      populate: {
+        path: "currentPlan",
+        select: currentPlanSelectFields,
+      },
+    })
+    .lean()
+
+  return c.json(user?.hidden || [])
+}
+
+export const hideProfile = async (c: zContext<{ json: typeof hideProfileSchema }>) => {
+  const { userId } = c.req.valid("json")
+  const { _id } = c.get("user")
+
+  if (userId === _id) return c.json({ message: t(c, "cannotHideSelf") }, 400)
+
+  await User.updateOne({ _id }, { $addToSet: { hidden: userId } })
+  return c.json({ message: t(c, "profileHidden") })
+}
+
+export const unhideProfile = async (c: zContext<{ json: typeof hideProfileSchema }>) => {
+  const { userId } = c.req.valid("json")
+  const { _id } = c.get("user")
+
+  await User.updateOne({ _id }, { $pull: { hidden: userId } })
+  return c.json({ message: t(c, "profileUnhidden") })
 }
 
 export const updateProfile = async (c: zContext<{ json: typeof updateProfileSchema }>) => {

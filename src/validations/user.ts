@@ -41,6 +41,10 @@ export const userIdSchema = z.object({
   userId: z.string("User ID is required"),
 })
 
+export const hideProfileSchema = z.object({
+  userId: z.string("User ID is required").regex(/^[a-f\d]{24}$/i, "Invalid user ID"),
+})
+
 export const updateProfileSchema = userSchema.omit({
   email: true,
   password: true,
