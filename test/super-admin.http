@@ -12,6 +12,11 @@ GET {{host}}/users/active?days=7
 Authorization: {{token}}
 
 
+### user unlocked profiles (current plan)
+GET {{host}}/user/69db29cbc7d854d1224ede72/unlocked
+Authorization: {{token}}
+
+
 ### paid users --- limit=4&skip=20
 GET {{host}}/users/paid
 Authorization: {{token}}

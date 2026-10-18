@@ -8,7 +8,7 @@ import type {
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
-import { Payment, User, Admin } from "../models/index.js";
+import { Payment, User, Admin, UserAccess } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
@@ -536,6 +536,31 @@ export async function getUserCurrentPlan(c: zContext<{ param: typeof _idParamSch
   if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
 
   return c.json((user as any).currentPlan ?? null)
+}
+
+export async function getUserUnlockedProfiles(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+
+  const user = await User.findById(_id)
+    .select("currentPlan")
+    .populate("currentPlan", "_id subscribedTo expiryDate noOfProfilesCanView")
+    .lean()
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
+
+  const plan = (user as any).currentPlan
+  if (!plan) return c.json({ plan: null, used: 0, profiles: [] })
+
+  const list = await UserAccess.find({ viewer: _id, payment: plan._id })
+    .select("viewed createdAt")
+    .populate("viewed", userSelectFields)
+    .sort({ createdAt: -1 })
+    .lean()
+
+  const profiles = list
+    .filter(item => item.viewed)
+    .map(item => ({ ...(item.viewed as object), unlockedAt: item.createdAt }))
+
+  return c.json({ plan, used: list.length, profiles })
 }
 
 export async function makePaymentForUser(c: zContext<{ json: typeof mkePaymentSchema }>) {

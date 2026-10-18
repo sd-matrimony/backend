@@ -6,7 +6,7 @@ import {
   getUsersGroupedCount, getAdmins, createAdmin,
   updateAdmin, getUsersInvitations, updateInvited, resetPass,
   makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
-  updateUserCritical, getDashboardStats, getActiveUsers,
+  updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles,
 } from "../controllers/super-admin.js";
 
 import {
@@ -36,6 +36,7 @@ superAdminRoutes
   .get("/users/grouped/list", zv("query", usersGroupedListSchema), getUsersGroupedList)
   .get("/users/invitations", zv("query", findUsersSchema), getUsersInvitations)
   .get("/user/:_id/plan", zv("param", _idParamSchema), getUserCurrentPlan)
+  .get("/user/:_id/unlocked", zv("param", _idParamSchema), getUserUnlockedProfiles)
   .delete("/user/:_id/plan", zv("param", _idParamSchema), removeUserPlan)
   .get("/admins", getAdmins)
   .post("/admin", zv("json", adminCreateSchema), createAdmin)
