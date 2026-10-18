@@ -2,8 +2,8 @@
 @token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiYWNjZXNzVG9rZW4iLCJleHAiOjE3ODEzMzY0NzEsIl9pZCI6IjY5Y2NmZGE2NzU2MjkyMDYzYTI2NDZhNiIsInJvbGUiOiJzdXBlci1hZG1pbiJ9.0CNWRe9B7gtsTS4PIaHKqDOyPAg7CoGaFmITYAUjBNY
 
 
-### dashboard stats
-GET {{host}}/stats
+### dashboard stats --- month=YYYY-MM (defaults to current month)
+GET {{host}}/stats?month=2026-09
 Authorization: {{token}}
 
 
@@ -14,6 +14,11 @@ Authorization: {{token}}
 
 ### user unlocked profiles (current plan)
 GET {{host}}/user/69db29cbc7d854d1224ede72/unlocked
+Authorization: {{token}}
+
+
+### paid users by month (payments made in that month, active or expired)
+GET {{host}}/users/paid?month=2026-10&limit=4&skip=0
 Authorization: {{token}}
 
 

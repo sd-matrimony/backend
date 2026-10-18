@@ -4,7 +4,7 @@ import type {
   skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema,
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
   resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
-  activeUsersSchema,
+  activeUsersSchema, paidUsersSchema, dashboardStatsSchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
@@ -30,10 +30,15 @@ function daysAgo(days: number) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 }
 
-export async function getDashboardStats(c: Context<Env>) {
+export async function getDashboardStats(c: zContext<{ query: typeof dashboardStatsSchema }>) {
+  const { month } = c.req.valid("query") || {}
+
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const [year, mon] = month ? month.split("-").map(Number) : [now.getFullYear(), now.getMonth() + 1]
+  const startOfMonth = new Date(year, mon - 1, 1)
+  const endOfMonth = new Date(year, mon, 1)
+  const inMonth = { $and: [{ $gte: ["$createdAt", startOfMonth] }, { $lt: ["$createdAt", endOfMonth] }] }
 
   const [revenue, totalUsers, activeToday, active7d, active30d] = await Promise.all([
     Payment.aggregate([
@@ -48,8 +53,11 @@ export async function getDashboardStats(c: Context<Env>) {
           byAdmin: {
             $sum: { $cond: [{ $regexMatch: { input: "$orderId", regex: /^by-admin-/ } }, "$amount", 0] }
           },
-          thisMonth: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, "$amount", 0] }
+          month: {
+            $sum: { $cond: [inMonth, "$amount", 0] }
+          },
+          monthCount: {
+            $sum: { $cond: [inMonth, 1, 0] }
           },
           today: {
             $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, "$amount", 0] }
@@ -63,10 +71,10 @@ export async function getDashboardStats(c: Context<Env>) {
     User.countDocuments({ lastActiveAt: { $gte: daysAgo(30) } }),
   ])
 
-  const { total = 0, count = 0, online = 0, byAdmin = 0, thisMonth = 0, today = 0 } = revenue[0] || {}
+  const { total = 0, count = 0, online = 0, byAdmin = 0, month: monthTotal = 0, monthCount = 0, today = 0 } = revenue[0] || {}
 
   return c.json({
-    revenue: { total, count, online, byAdmin, thisMonth, today },
+    revenue: { total, count, online, byAdmin, month: monthTotal, monthCount, today },
     users: { total: totalUsers, activeToday, active7d, active30d },
   })
 }
@@ -76,7 +84,7 @@ export async function getActiveUsers(c: zContext<{ query: typeof activeUsersSche
 
   const users = await User.find({ lastActiveAt: { $gte: daysAgo(days) } })
     .select(`${userSelectFields} lastActiveAt lastLoginAt`)
-    .sort({ lastActiveAt: -1 })
+    .sort({ lastActiveAt: -1, _id: -1 })
     .skip(skip)
     .limit(limit)
     .lean()
@@ -84,18 +92,24 @@ export async function getActiveUsers(c: zContext<{ query: typeof activeUsersSche
   return c.json(users)
 }
 
-export async function getPaidUsers(c: zContext<{ query: typeof skipLimitSchema }>) {
-  const { limit, skip } = c.req.valid("query") || { limit: 10, skip: 0 }
+export async function getPaidUsers(c: zContext<{ query: typeof paidUsersSchema }>) {
+  const { limit, skip, month } = c.req.valid("query") || { limit: 10, skip: 0 }
 
   const numLimit = Number(limit || 10)
   const numSkip = Number(skip || 0)
 
-  const users = await Payment.find({ expiryDate: { $gte: new Date() } })
+  let filter: Record<string, unknown> = { expiryDate: { $gte: new Date() } }
+  if (month) {
+    const [year, mon] = month.split("-").map(Number)
+    filter = { createdAt: { $gte: new Date(year, mon - 1, 1), $lt: new Date(year, mon, 1) } }
+  }
+
+  const users = await Payment.find(filter)
     .select(planSelectFields)
     .populate("user", userSelectFields)
     .limit(numLimit)
     .skip(numSkip)
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: -1, _id: -1 })
     .lean()
 
   const final = users.map(({ createdAt, ...user }) => ({
@@ -120,7 +134,7 @@ export async function getAssistedSubscribedUsers(c: zContext<{ query: typeof ski
     .populate("user", userSelectFields)
     .limit(numLimit)
     .skip(numSkip)
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: -1, _id: -1 })
     .lean()
 
   const final = users.map(({ createdAt, ...user }) => ({
@@ -217,7 +231,7 @@ export async function getUsersByCreatedBy(c: zContext<{ query: typeof usersCreat
     .select(userSelectFields)
     .limit(numLimit)
     .skip(numSkip)
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: -1, _id: -1 })
     .lean()
 
   return c.json(users)
@@ -442,7 +456,7 @@ export async function getUsersInvitations(c: zContext<{ query: typeof findUsersS
     .populate("currentPlan", "subscribedTo expiryDate")
     .limit(numLimit)
     .skip(numSkip)
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: -1, _id: -1 })
     .lean()
 
   return c.json(users)
