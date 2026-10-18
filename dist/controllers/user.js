@@ -1,8 +1,15 @@
+import { Types } from 'mongoose';
 import { getImgUrl, deleteImg } from '../services/index.js';
 import { UserAccess, User } from '../models/index.js';
 import { getFilterObj, t } from '../utils/index.js';
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified";
 const currentPlanSelectFields = "-_id subscribedTo expiryDate";
+function withHiddenFlag(profiles, hidden) {
+    const hiddenIds = new Set(hidden.map(String));
+    return profiles
+        .filter(Boolean)
+        .map(profile => ({ ...profile, isHidden: hiddenIds.has(String(profile._id)) }));
+}
 async function checkUserAccess(user, _id) {
     const isOwner = user._id.toString() === _id;
     if (isOwner || user.role.includes("admin"))
@@ -22,7 +29,7 @@ export const getUserDetails = async (c) => {
     const { _id } = c.req.valid("param");
     const user = c.get("user");
     const hasFullAccess = await checkUserAccess(user, _id);
-    let select = "-refreshTokens -password -liked -verifiyOtp -role -brokerAppointed -approvalStatus -email";
+    let select = "-refreshTokens -password -liked -hidden -verifiyOtp -role -brokerAppointed -approvalStatus -email";
     if (!hasFullAccess) {
         select += " -contactDetails -vedicHoroscope.vedicHoroscopePic";
     }
@@ -83,7 +90,8 @@ export const getMatches = async (c) => {
     }
     const filters = getFilterObj({ ...rest, ...payload });
     const liked = user?.liked || [];
-    const baseFilters = { ...filters, _id: { $ne: _id } };
+    const hidden = user?.hidden || [];
+    const baseFilters = { ...filters, _id: { $nin: [...hidden, new Types.ObjectId(_id)] } };
     const select = userSelectFields.split(" ").reduce((acc, field) => ({ ...acc, [field]: 1 }), {});
     const final = await User.aggregate([
         { $match: baseFilters },
@@ -129,7 +137,7 @@ export const getLikesList = async (c) => {
     const numSkip = Number(skip || 0);
     const type = 'liked';
     const list = await User.findOne({ _id })
-        .select(type)
+        .select(`${type} hidden`)
         .populate({
         path: type,
         select: userSelectFields,
@@ -145,7 +153,7 @@ export const getLikesList = async (c) => {
         .sort({ createdAt: -1 })
         .lean();
     // @ts-ignore
-    return c.json(list?.[type] || []);
+    return c.json(withHiddenFlag(list?.[type] || [], list?.hidden || []));
 };
 export const getUnlockedProfiles = async (c) => {
     const { _id, currentPlan } = c.get("user");
@@ -163,7 +171,8 @@ export const getUnlockedProfiles = async (c) => {
     })
         .sort({ createdAt: -1 })
         .lean();
-    const payload = list.map((item) => item.viewed);
+    const me = await User.findById(_id).select("hidden").lean();
+    const payload = withHiddenFlag(list.map((item) => item.viewed), me?.hidden || []);
     return c.json(payload);
 };
 export const addLiked = async (c) => {
@@ -171,8 +180,6 @@ export const addLiked = async (c) => {
     const { _id } = c.get("user");
     const type = "liked";
     const updateObj = { $push: { [type]: userId } };
-    // const otherType = type === "liked" ? "disliked" : "liked"
-    // updateObj.$pull = { [otherType]: userId }
     await User.updateOne({ _id }, updateObj);
     return c.json({ message: t(c, "likedAdded") });
 };
@@ -182,6 +189,40 @@ export const removeLiked = async (c) => {
     const type = "liked";
     await User.updateOne({ _id }, { $pull: { [type]: userId } });
     return c.json({ message: t(c, "likedRemoved") });
+};
+export const getHiddenList = async (c) => {
+    const { limit, skip } = c.req.valid("query") || { limit: 10, skip: 0 };
+    const { _id } = c.get("user");
+    const user = await User.findOne({ _id })
+        .select("hidden")
+        .populate({
+        path: "hidden",
+        select: userSelectFields,
+        options: {
+            limit: Number(limit || 10),
+            skip: Number(skip || 0),
+        },
+        populate: {
+            path: "currentPlan",
+            select: currentPlanSelectFields,
+        },
+    })
+        .lean();
+    return c.json(user?.hidden || []);
+};
+export const hideProfile = async (c) => {
+    const { userId } = c.req.valid("json");
+    const { _id } = c.get("user");
+    if (userId === _id)
+        return c.json({ message: t(c, "cannotHideSelf") }, 400);
+    await User.updateOne({ _id }, { $addToSet: { hidden: userId } });
+    return c.json({ message: t(c, "profileHidden") });
+};
+export const unhideProfile = async (c) => {
+    const { userId } = c.req.valid("json");
+    const { _id } = c.get("user");
+    await User.updateOne({ _id }, { $pull: { hidden: userId } });
+    return c.json({ message: t(c, "profileUnhidden") });
 };
 export const updateProfile = async (c) => {
     const payload = c.req.valid("json");

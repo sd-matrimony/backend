@@ -1,4 +1,4 @@
-import { setRefreshTokenCookie, deleteRefreshTokenCookie, comparePasswords, hashPassword, tokenEnums, generateOtp, getToken, verifyToken, isEmail, env, t, } from '../utils/index.js';
+import { setRefreshTokenCookie, deleteRefreshTokenCookie, comparePasswords, hashPassword, tokenEnums, generateOtp, getToken, verifyToken, isEmail, maskEmail, env, t, tf, } from '../utils/index.js';
 import { registerSchema, loginSchema, refreshTokenSchema, forgotPassSchema, resetPassSchema, updatePasswordSchema, resendVerifyEmailSchema, verifyAccountSchema, registerImageSchema, emailSchemaObj, mobileSchemaObj, } from '../validations/index.js';
 import { welcome, resendVerifyEmail as resendVerifyEmailTemp, forgotPass } from '../mail-templates/index.js';
 import { claimImage, getImgUrl, transporter } from '../services/index.js';
@@ -93,7 +93,9 @@ export const login = async (c) => {
     const refresh_token = await getToken(payload, tokenEnums.refreshToken);
     const access_token = await getToken(payload, tokenEnums.accessToken);
     const Model = getModel(role);
+    const now = new Date();
     await Model.updateOne({ _id: user._id }, {
+        $set: { lastLoginAt: now, lastActiveAt: now },
         $push: {
             refreshTokens: {
                 $each: [refresh_token],
@@ -134,32 +136,35 @@ export async function accessToken(c) {
         payload.approvalStatus = user.approvalStatus;
     }
     const access_token = await getToken(payload, tokenEnums.accessToken);
+    await Model.updateOne({ _id: user._id }, { lastActiveAt: new Date() });
     return c.json({ access_token });
 }
 export async function forgetPass(c) {
     const { email, role = "user" } = c.req.valid("json");
     const Model = getModel(role);
     const findBy = isEmail(email) ? { email } : { "contactDetails.mobile": email };
-    const user = await Model.findOne(findBy).select("_id").lean();
+    const user = await Model.findOne(findBy).select("_id email").lean();
     if (!user)
         return c.json({ message: t(c, 'userNotFound') }, 400);
+    if (!user.email)
+        return c.json({ message: t(c, 'onlyMobileLinked') }, 400);
     const verifiyOtp = generateOtp();
     await Model.updateOne({ _id: user._id }, { verifiyOtp });
-    if (isEmail(email)) {
-        const { subject, html } = forgotPass(verifiyOtp);
-        try {
-            await transporter.sendMail({
-                to: email,
-                from: env.EMAIL_ID,
-                subject,
-                html
-            });
-        }
-        catch (error) {
-            console.log("forgot-pass", error);
-        }
+    const { subject, html } = forgotPass(verifiyOtp);
+    try {
+        await transporter.sendMail({
+            to: user.email,
+            from: env.EMAIL_ID,
+            subject,
+            html
+        });
     }
-    return c.json({ message: t(c, 'passkeySent') });
+    catch (error) {
+        console.log("forgot-pass", error);
+    }
+    if (isEmail(email))
+        return c.json({ message: t(c, 'passkeySent') });
+    return c.json({ message: tf(c, 'passkeySentToLinkedEmail', { email: maskEmail(user.email) }) });
 }
 export async function resetPass(c) {
     const { email, password, otp, role = "user" } = c.req.valid("json");
@@ -329,7 +334,7 @@ export const emailUpdate = async (c) => {
     const Model = getModel(user.role);
     const isAlreadyExists = await Model.findOne({ email }).select("_id email").lean();
     if (isAlreadyExists)
-        return c.json({ message: t(c, 'emailExists') });
+        return c.json({ message: t(c, 'emailExists') }, 400);
     await Model.updateOne({ _id: user._id }, { email, isVerified: false });
     const { subject, html } = await resendVerifyEmailTemp(user._id.toString(), user.role);
     try {
@@ -351,7 +356,7 @@ export const mobileUpdate = async (c) => {
     const Model = getModel(user.role);
     const isAlreadyExists = await Model.findOne({ "contactDetails.mobile": mobile }).select("_id contactDetails.mobile").lean();
     if (isAlreadyExists)
-        return c.json({ message: t(c, 'mobileExists') });
+        return c.json({ message: t(c, 'mobileExists') }, 400);
     await Model.updateOne({ _id: user._id }, {
         "contactDetails.mobile": mobile
     });

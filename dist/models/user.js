@@ -153,6 +153,10 @@ const userSchema = new Schema({
             type: Schema.Types.ObjectId,
             ref: 'User'
         }],
+    hidden: [{
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        }],
     createdBy: {
         type: Schema.Types.ObjectId,
         ref: 'Admin',
@@ -164,7 +168,12 @@ const userSchema = new Schema({
     invited: {
         type: Boolean,
         default: false,
-    }
+    },
+    lastLoginAt: Date,
+    lastActiveAt: {
+        type: Date,
+        index: true,
+    },
 }, { timestamps: true });
 userSchema.pre('validate', function (next) {
     if (!this.email && !this.contactDetails?.mobile) {

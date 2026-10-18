@@ -20,6 +20,11 @@ export const usersCreatedBySchema = z.object({
     createdAtToday: z.coerce.boolean().optional(),
     createdBy: z.string().optional(),
 }).optional();
+export const activeUsersSchema = z.object({
+    skip: z.coerce.number().optional().default(0),
+    limit: z.coerce.number().optional().default(50),
+    days: z.coerce.number().int().min(1).max(365).optional().default(1),
+});
 export const adminCreateSchema = adminSchema
     .omit({ role: true })
     .safeExtend({

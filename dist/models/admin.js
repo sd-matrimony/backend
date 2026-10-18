@@ -47,6 +47,8 @@ const adminSchema = new Schema({
         type: Boolean,
         default: false,
     },
+    lastLoginAt: Date,
+    lastActiveAt: Date,
 }, { timestamps: true });
 adminSchema.pre('validate', function (next) {
     if (!this.email && !this.contactDetails?.mobile) {

@@ -1,10 +1,12 @@
 import { Hono } from "hono";
-import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, } from "../controllers/super-admin.js";
-import { skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema, } from "../validations/index.js";
+import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles, } from "../controllers/super-admin.js";
+import { skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema, activeUsersSchema, } from "../validations/index.js";
 import roleCheck from "../middlewares/role-check.js";
 const superAdminRoutes = new Hono();
 superAdminRoutes.use(roleCheck(["super-admin"]));
 superAdminRoutes
+    .get("/stats", getDashboardStats)
+    .get("/users/active", zv("query", activeUsersSchema), getActiveUsers)
     .get("/users/count", zv("query", findUsersSchema), getUsersCount)
     .get("/users/paid", zv("query", skipLimitSchema), getPaidUsers)
     .get("/users/assisted-subscribed", zv("query", skipLimitSchema), getAssistedSubscribedUsers)
@@ -15,6 +17,7 @@ superAdminRoutes
     .get("/users/grouped/list", zv("query", usersGroupedListSchema), getUsersGroupedList)
     .get("/users/invitations", zv("query", findUsersSchema), getUsersInvitations)
     .get("/user/:_id/plan", zv("param", _idParamSchema), getUserCurrentPlan)
+    .get("/user/:_id/unlocked", zv("param", _idParamSchema), getUserUnlockedProfiles)
     .delete("/user/:_id/plan", zv("param", _idParamSchema), removeUserPlan)
     .get("/admins", getAdmins)
     .post("/admin", zv("json", adminCreateSchema), createAdmin)

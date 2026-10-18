@@ -1,4 +1,4 @@
-import { Payment, User, Admin } from "../models/index.js";
+import { Payment, User, Admin, UserAccess } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
@@ -10,6 +10,56 @@ export async function getUsersCount(c) {
     const filters = getFilterObj(queries);
     const count = await User.countDocuments(filters);
     return c.json({ count });
+}
+function daysAgo(days) {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+export async function getDashboardStats(c) {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [revenue, totalUsers, activeToday, active7d, active30d] = await Promise.all([
+        Payment.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$amount" },
+                    count: { $sum: 1 },
+                    online: {
+                        $sum: { $cond: [{ $regexMatch: { input: "$orderId", regex: /^by-admin-/ } }, 0, "$amount"] }
+                    },
+                    byAdmin: {
+                        $sum: { $cond: [{ $regexMatch: { input: "$orderId", regex: /^by-admin-/ } }, "$amount", 0] }
+                    },
+                    thisMonth: {
+                        $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, "$amount", 0] }
+                    },
+                    today: {
+                        $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, "$amount", 0] }
+                    },
+                }
+            }
+        ]),
+        User.countDocuments({ isDeleted: { $ne: true } }),
+        User.countDocuments({ lastActiveAt: { $gte: daysAgo(1) } }),
+        User.countDocuments({ lastActiveAt: { $gte: daysAgo(7) } }),
+        User.countDocuments({ lastActiveAt: { $gte: daysAgo(30) } }),
+    ]);
+    const { total = 0, count = 0, online = 0, byAdmin = 0, thisMonth = 0, today = 0 } = revenue[0] || {};
+    return c.json({
+        revenue: { total, count, online, byAdmin, thisMonth, today },
+        users: { total: totalUsers, activeToday, active7d, active30d },
+    });
+}
+export async function getActiveUsers(c) {
+    const { skip, limit, days } = c.req.valid("query");
+    const users = await User.find({ lastActiveAt: { $gte: daysAgo(days) } })
+        .select(`${userSelectFields} lastActiveAt lastLoginAt`)
+        .sort({ lastActiveAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    return c.json(users);
 }
 export async function getPaidUsers(c) {
     const { limit, skip } = c.req.valid("query") || { limit: 10, skip: 0 };
@@ -397,6 +447,27 @@ export async function getUserCurrentPlan(c) {
     if (!user)
         return c.json({ message: t(c, "userNotFound") }, 404);
     return c.json(user.currentPlan ?? null);
+}
+export async function getUserUnlockedProfiles(c) {
+    const { _id } = c.req.valid("param");
+    const user = await User.findById(_id)
+        .select("currentPlan")
+        .populate("currentPlan", "_id subscribedTo expiryDate noOfProfilesCanView")
+        .lean();
+    if (!user)
+        return c.json({ message: t(c, "userNotFound") }, 404);
+    const plan = user.currentPlan;
+    if (!plan)
+        return c.json({ plan: null, used: 0, profiles: [] });
+    const list = await UserAccess.find({ viewer: _id, payment: plan._id })
+        .select("viewed createdAt")
+        .populate("viewed", userSelectFields)
+        .sort({ createdAt: -1 })
+        .lean();
+    const profiles = list
+        .filter(item => item.viewed)
+        .map(item => ({ ...item.viewed, unlockedAt: item.createdAt }));
+    return c.json({ plan, used: list.length, profiles });
 }
 export async function makePaymentForUser(c) {
     const { _id, ...body } = c.req.valid("json");
