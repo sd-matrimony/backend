@@ -6,7 +6,7 @@
   "languages": "v1/languages.json",
   "religions": "v1/religions.json",
   "sectors": "v1/sectors.json",
-  "nakshatra": "v1/nakshatra.json",
+  "nakshatra": "v2/nakshatra.json",
   "raasi": "v1/raasi.json",
   "translations": {
     "ta": {
