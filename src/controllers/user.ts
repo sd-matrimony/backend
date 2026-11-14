@@ -128,7 +128,7 @@ export const getMatches = async (c: zContext<{ query: typeof matchedUsersSchema 
   const select = userSelectFields.split(" ").reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
   const final = await User.aggregate([
     { $match: baseFilters },
-    { $sort: { createdAt: -1 } },
+    { $sort: { createdAt: -1, _id: -1 } },
     { $skip: numSkip },
     { $limit: numLimit },
     { $project: select },
@@ -179,6 +179,7 @@ export const getLikesList = async (c: zContext<{ query: typeof skipLimitSchema }
       path: type,
       select: userSelectFields,
       options: {
+        sort: { _id: -1 },
         limit: numLimit,
         skip: numSkip,
       },
@@ -187,7 +188,6 @@ export const getLikesList = async (c: zContext<{ query: typeof skipLimitSchema }
         select: currentPlanSelectFields,
       },
     })
-    .sort({ createdAt: -1 })
     .lean()
 
   // @ts-ignore
@@ -223,7 +223,7 @@ export const addLiked = async (c: zContext<{ json: typeof userIdSchema }>) => {
   const { _id } = c.get("user")
 
   const type = "liked"
-  const updateObj: any = { $push: { [type]: userId } }
+  const updateObj: any = { $addToSet: { [type]: userId } }
   await User.updateOne({ _id }, updateObj)
   return c.json({ message: t(c, "likedAdded") })
 }
@@ -247,6 +247,7 @@ export const getHiddenList = async (c: zContext<{ query: typeof skipLimitSchema 
       path: "hidden",
       select: userSelectFields,
       options: {
+        sort: { _id: -1 },
         limit: Number(limit || 10),
         skip: Number(skip || 0),
       },

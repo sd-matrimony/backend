@@ -1,7 +1,7 @@
 @host = http://localhost:5000/api
 
-#### create random users
-POST {{host}}/faker
+#### create random users (non-production only) --- count=1..200 (default 50)
+POST {{host}}/faker?count=200
 Content-Type: application/json
 
 

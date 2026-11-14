@@ -207,3 +207,7 @@ export const imgFileSchema = z.instanceof(File, { message: "Please upload a vali
   .refine(file => file.size <= maxSize, {
     message: "Max file size is 5MB"
   })
+
+export const fakerSchema = z.object({
+  count: z.coerce.number().int().min(1).max(200).optional().default(50),
+}).optional()
