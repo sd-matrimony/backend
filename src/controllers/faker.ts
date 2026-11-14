@@ -5,6 +5,7 @@ import {
   randCity, rand,
 } from "@ngneat/falso";
 import { readFile } from "fs/promises";
+import { Types } from "mongoose";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -40,7 +41,8 @@ const generateRandomUser = async (index: number, batch: string, password: string
   const imgPath = join(imagesRoot, genderFolder, `${genderFolder}${imgNum}.jpg`)
   const imgBuffer = await readFile(imgPath)
   const imgBlob = new Blob([imgBuffer], { type: "image/jpeg" })
-  const profileImg = await getImgUrl(imgBlob)
+  const _id = new Types.ObjectId()
+  const profileImg = await getImgUrl(imgBlob, _id.toString())
 
   const sector = rand(sectors)
   const profession = sector === "Unemployed" ? "Unemployed" : rand(professions)
@@ -56,6 +58,7 @@ const generateRandomUser = async (index: number, batch: string, password: string
   const dob = randBetweenDate({ from: minDOB, to: maxDOB })
 
   return {
+    _id,
     createdAt,
     updatedAt: createdAt,
     fullName: randFullName({ gender: gender.toLowerCase() as "male" | "female", withAccents: false }),

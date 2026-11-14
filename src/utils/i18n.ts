@@ -49,6 +49,7 @@ const en = {
 
   userImageUploaded: "User image uploaded successfully",
   imageDeleted: "Image deleted successfully",
+  imageNotFound: "Image not found",
   alreadyFullAccess: "You have full access to this profile already",
   unlockLimitReached: "You have reached the limit of unlocked profiles",
   profileUnlocked: "Profile unlocked successfully",
@@ -113,6 +114,7 @@ const ta: Record<MessageKey, string> = {
 
   userImageUploaded: "படம் பதிவேற்றப்பட்டது",
   imageDeleted: "படம் நீக்கப்பட்டது",
+  imageNotFound: "படம் கிடைக்கவில்லை",
   alreadyFullAccess: "இந்த சுயவிவரத்திற்கு ஏற்கனவே முழு அணுகல் உள்ளது",
   unlockLimitReached: "திறக்கப்பட்ட சுயவிவரங்களின் வரம்பை எட்டிவிட்டீர்கள்",
   profileUnlocked: "சுயவிவரம் திறக்கப்பட்டது",

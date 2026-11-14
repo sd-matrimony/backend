@@ -9,7 +9,7 @@ import {
 
 import {
   _idParamSchema, imgUploadSchema, matchedUsersSchema, skipLimitSchema,
-  updateProfileSchema, userIdSchema, hideProfileSchema, zv,
+  updateProfileSchema, userIdSchema, hideProfileSchema, imgDeleteSchema, zv,
 } from "../validations/index.js";
 
 const userRoutes = new Hono()
@@ -29,6 +29,6 @@ userRoutes
   .post("/unlock", zv("json", _idParamSchema), unlockProfile)
   .put("/profile", zv("json", updateProfileSchema), updateProfile)
   .put("/images", zv("form", imgUploadSchema), imgUpload)
-  .delete("/image/:_id", zv("param", _idParamSchema), imgDelete)
+  .delete("/image", zv("json", imgDeleteSchema), imgDelete)
 
 export default userRoutes

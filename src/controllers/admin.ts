@@ -1,3 +1,5 @@
+import { Types } from "mongoose";
+
 import type { zContext } from "../types/index.js";
 
 import {
@@ -7,6 +9,7 @@ import {
 
 import { hashPassword, getFilterObj, t } from "../utils/index.js";
 import { redisClient } from "../services/connect-redis.js";
+import { claimUserImages } from "../services/cloudinary.js";
 import { User } from "../models/index.js";
 
 const userSelect = "_id fullName email contactDetails.mobile profileImg dob gender maritalStatus otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
@@ -173,8 +176,11 @@ export async function createUsers(c: zContext<{ json: typeof createUsersSchema }
   for (const user of users) {
     try {
       const hashedPass = await hashPassword(user.password)
+      const userId = new Types.ObjectId()
+      const withImages = await claimUserImages(user, userId.toString())
       const newUser = new User({
-        ...user,
+        ...withImages,
+        _id: userId,
         password: hashedPass,
         approvalStatus: "approved",
         email: user.email || undefined,

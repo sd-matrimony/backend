@@ -18,7 +18,7 @@ import {
 
 import { welcome, resendVerifyEmail as resendVerifyEmailTemp, forgotPass } from '../mail-templates/index.js';
 
-import { claimImage, getImgUrl, transporter } from '../services/index.js';
+import { claimUserImages, getImgUrl, transporter } from '../services/index.js';
 import { Admin, User, getModel } from '../models/index.js';
 
 export const exists = async (c: zContext<{ query: typeof forgotPassSchema }>) => {
@@ -66,15 +66,12 @@ export const register = async (c: zContext<{ json: typeof registerSchema }>) => 
   })
 
   if (validData.role === "user") {
-    const userId = user._id.toString()
-    const imagesToClaim = [
-      ...new Set([
-        ...(validData.profileImg ? [validData.profileImg] : []),
-        ...(validData.images ?? []),
-        ...(validData.vedicHoroscope?.vedicHoroscopePic ? [validData.vedicHoroscope.vedicHoroscopePic] : []),
-      ])
-    ]
-    await Promise.all(imagesToClaim.map(url => claimImage(url, userId)))
+    const claimed = await claimUserImages(validData, user._id.toString())
+    user.set("profileImg", claimed.profileImg)
+    user.set("images", claimed.images ?? [])
+    if (claimed.vedicHoroscope?.vedicHoroscopePic) {
+      user.set("vedicHoroscope.vedicHoroscopePic", claimed.vedicHoroscope.vedicHoroscopePic)
+    }
   }
 
   await user.save()

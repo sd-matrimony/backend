@@ -134,9 +134,14 @@ Content-Type: image/jpg
 ------WebKitFormBoundary--
 
 
-### delete image
-DELETE {{host}}/image/ayz0slcjmfsmt60ihvz1
+### delete image --- url must belong to the user (images, profileImg or horoscope pic); admins pass _id
+DELETE {{host}}/image
 Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "url": "https://res.cloudinary.com/<cloud>/image/upload/v1/users/<userId>/<file>.jpg"
+}
 
 
 ### unlock profile

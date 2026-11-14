@@ -1,10 +1,10 @@
 import type { Context } from 'hono';
 import { Types } from 'mongoose';
 
-import type { _idParamSchema, imgUploadSchema, matchedUsersSchema, skipLimitSchema, updateProfileSchema, userIdSchema, hideProfileSchema } from '../validations/index.js';
+import type { _idParamSchema, imgUploadSchema, imgDeleteSchema, matchedUsersSchema, skipLimitSchema, updateProfileSchema, userIdSchema, hideProfileSchema } from '../validations/index.js';
 import type { zContext } from '../types/index.js';
 
-import { getImgUrl, deleteImg } from '../services/index.js';
+import { getImgUrl, deleteImageByUrl } from '../services/index.js';
 import { UserAccess, User } from '../models/index.js';
 
 import { getFilterObj, t } from '../utils/index.js';
@@ -293,30 +293,55 @@ export const imgUpload = async (c: zContext<{ form: typeof imgUploadSchema }>) =
   const formData = c.req.valid("form")
   const user = c.get('user')
 
-  const isProfilePic = formData.isProfilePic
-  const images = formData.images
+  const target = formData.target ?? (formData.isProfilePic ? "profile" : "gallery")
+  const _id = user.role === "user" ? user._id.toString() : formData._id
+  if (!_id) return c.json({ message: t(c, "userNotFound") }, 400)
 
-  const _id = user.role === "user" ? user._id : formData._id
-  const uploadedImages = await Promise.all(images.map(async (image) => await getImgUrl(image, _id)))
+  const images = target === "horoscope" ? formData.images.slice(0, 1) : formData.images
+  const urls = await Promise.all(images.map(image => getImgUrl(image, _id)))
 
-  const updateQuery: any = {
-    $push: {
-      images: { $each: uploadedImages }
+  if (target === "horoscope") {
+    const existing = await User.findById(_id).select("images vedicHoroscope.vedicHoroscopePic").lean()
+    const previous = existing?.vedicHoroscope?.vedicHoroscopePic
+
+    await User.updateOne({ _id }, { "vedicHoroscope.vedicHoroscopePic": urls[0] })
+
+    if (previous && !existing?.images?.includes(previous)) {
+      await deleteImageByUrl(previous).catch(() => null)
     }
+  } else {
+    const updateQuery: Record<string, unknown> = { $push: { images: { $each: urls } } }
+    if (target === "profile") updateQuery.profileImg = urls[0]
+    await User.updateOne({ _id }, updateQuery)
   }
 
-  if (isProfilePic) {
-    updateQuery.profileImg = uploadedImages[0]
-  }
-
-  await User.updateOne({ _id }, updateQuery)
-
-  return c.json({ message: t(c, "userImageUploaded") })
+  return c.json({ message: t(c, "userImageUploaded"), urls })
 }
 
-export const imgDelete = async (c: zContext<{ param: typeof _idParamSchema }>) => {
-  const { _id } = c.req.valid("param")
-  await deleteImg(_id)
+export const imgDelete = async (c: zContext<{ json: typeof imgDeleteSchema }>) => {
+  const { url, _id: targetId } = c.req.valid("json")
+  const user = c.get('user')
+
+  const _id = user.role === "user" ? user._id.toString() : targetId
+  if (!_id) return c.json({ message: t(c, "userNotFound") }, 400)
+
+  const owner = await User.findById(_id).select("images profileImg vedicHoroscope.vedicHoroscopePic").lean()
+  const isOwned = !!owner && (
+    owner.images?.includes(url) ||
+    owner.profileImg === url ||
+    owner.vedicHoroscope?.vedicHoroscopePic === url
+  )
+  if (!isOwned) return c.json({ message: t(c, "imageNotFound") }, 404)
+
+  const update: Record<string, unknown> = { $pull: { images: url } }
+  const unset: Record<string, ""> = {}
+  if (owner.profileImg === url) unset.profileImg = ""
+  if (owner.vedicHoroscope?.vedicHoroscopePic === url) unset["vedicHoroscope.vedicHoroscopePic"] = ""
+  if (Object.keys(unset).length) update.$unset = unset
+
+  await User.updateOne({ _id }, update)
+  await deleteImageByUrl(url).catch(() => null)
+
   return c.json({ message: t(c, "imageDeleted") })
 }
 
