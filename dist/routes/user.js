@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { imgUpload, getUserDetails, getMatches, getLikesList, addLiked, removeLiked, updateProfile, imgDelete, getPartnerPreferences, getUnlockedProfiles, unlockProfile, getCurrentPlan, getHiddenList, hideProfile, unhideProfile, } from "../controllers/user.js";
-import { _idParamSchema, imgUploadSchema, matchedUsersSchema, skipLimitSchema, updateProfileSchema, userIdSchema, hideProfileSchema, zv, } from "../validations/index.js";
+import { _idParamSchema, imgUploadSchema, matchedUsersSchema, skipLimitSchema, updateProfileSchema, userIdSchema, hideProfileSchema, imgDeleteSchema, zv, } from "../validations/index.js";
 const userRoutes = new Hono();
 userRoutes
     .get("/matches", zv("query", matchedUsersSchema), getMatches)
@@ -17,5 +17,5 @@ userRoutes
     .post("/unlock", zv("json", _idParamSchema), unlockProfile)
     .put("/profile", zv("json", updateProfileSchema), updateProfile)
     .put("/images", zv("form", imgUploadSchema), imgUpload)
-    .delete("/image/:_id", zv("param", _idParamSchema), imgDelete);
+    .delete("/image", zv("json", imgDeleteSchema), imgDelete);
 export default userRoutes;

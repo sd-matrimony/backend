@@ -1,7 +1,7 @@
 import { setRefreshTokenCookie, deleteRefreshTokenCookie, comparePasswords, hashPassword, tokenEnums, generateOtp, getToken, verifyToken, isEmail, maskEmail, env, t, tf, } from '../utils/index.js';
 import { registerSchema, loginSchema, refreshTokenSchema, forgotPassSchema, resetPassSchema, updatePasswordSchema, resendVerifyEmailSchema, verifyAccountSchema, registerImageSchema, emailSchemaObj, mobileSchemaObj, } from '../validations/index.js';
 import { welcome, resendVerifyEmail as resendVerifyEmailTemp, forgotPass } from '../mail-templates/index.js';
-import { claimImage, getImgUrl, transporter } from '../services/index.js';
+import { claimUserImages, getImgUrl, transporter } from '../services/index.js';
 import { Admin, User, getModel } from '../models/index.js';
 export const exists = async (c) => {
     const { email, role = "user" } = c.req.valid("query");
@@ -39,15 +39,12 @@ export const register = async (c) => {
         },
     });
     if (validData.role === "user") {
-        const userId = user._id.toString();
-        const imagesToClaim = [
-            ...new Set([
-                ...(validData.profileImg ? [validData.profileImg] : []),
-                ...(validData.images ?? []),
-                ...(validData.vedicHoroscope?.vedicHoroscopePic ? [validData.vedicHoroscope.vedicHoroscopePic] : []),
-            ])
-        ];
-        await Promise.all(imagesToClaim.map(url => claimImage(url, userId)));
+        const claimed = await claimUserImages(validData, user._id.toString());
+        user.set("profileImg", claimed.profileImg);
+        user.set("images", claimed.images ?? []);
+        if (claimed.vedicHoroscope?.vedicHoroscopePic) {
+            user.set("vedicHoroscope.vedicHoroscopePic", claimed.vedicHoroscope.vedicHoroscopePic);
+        }
     }
     await user.save();
     if (email && isEmail(email)) {

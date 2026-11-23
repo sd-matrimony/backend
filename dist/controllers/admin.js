@@ -1,6 +1,8 @@
+import { Types } from "mongoose";
 import { findUsersSchema, findUserSchema, skipLimitSchema, createUsersSchema, userMarriedToSchema, updateUserSchema, } from "../validations/index.js";
 import { hashPassword, getFilterObj, t } from "../utils/index.js";
 import { redisClient } from "../services/connect-redis.js";
+import { claimUserImages } from "../services/cloudinary.js";
 import { User } from "../models/index.js";
 const userSelect = "_id fullName email contactDetails.mobile profileImg dob gender maritalStatus otherDetails.caste otherDetails.subCaste proffessionalDetails.salary";
 function userSelectMap(prefix = "") {
@@ -142,8 +144,11 @@ export async function createUsers(c) {
     for (const user of users) {
         try {
             const hashedPass = await hashPassword(user.password);
+            const userId = new Types.ObjectId();
+            const withImages = await claimUserImages(user, userId.toString());
             const newUser = new User({
-                ...user,
+                ...withImages,
+                _id: userId,
                 password: hashedPass,
                 approvalStatus: "approved",
                 email: user.email || undefined,

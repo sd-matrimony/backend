@@ -31,6 +31,7 @@ export const approvalStatuses = ["pending", "approved", "rejected"];
 export const maritalStatuses = ["Single", "Divorced", "Widowed"];
 export const genders = ["Male", "Female"]; // "Other"
 export const roles = ["user", "admin", "super-admin"]; // "Other"
+export const MAX_GALLERY_IMAGES = 4;
 export const plans = ['basic', 'gold', 'diamond', 'platinum'];
 export const planValidityMonths = {
     basic: 3,

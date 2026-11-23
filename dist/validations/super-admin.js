@@ -27,6 +27,7 @@ export const paidUsersSchema = z.object({
     skip: z.coerce.number().optional().default(0),
     limit: z.coerce.number().optional().default(10),
     month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Month must be in YYYY-MM format").optional(),
+    plan: planEnum.optional(),
 }).optional();
 export const activeUsersSchema = z.object({
     skip: z.coerce.number().optional().default(0),

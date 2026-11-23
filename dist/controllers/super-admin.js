@@ -69,14 +69,16 @@ export async function getActiveUsers(c) {
     return c.json(users);
 }
 export async function getPaidUsers(c) {
-    const { limit, skip, month } = c.req.valid("query") || { limit: 10, skip: 0 };
+    const { limit, skip, month, plan } = c.req.valid("query") || { limit: 10, skip: 0 };
     const numLimit = Number(limit || 10);
     const numSkip = Number(skip || 0);
-    let filter = { expiryDate: { $gte: new Date() } };
+    const filter = {};
     if (month) {
         const [year, mon] = month.split("-").map(Number);
-        filter = { createdAt: { $gte: new Date(year, mon - 1, 1), $lt: new Date(year, mon, 1) } };
+        filter.createdAt = { $gte: new Date(year, mon - 1, 1), $lt: new Date(year, mon, 1) };
     }
+    if (plan)
+        filter.subscribedTo = plan;
     const users = await Payment.find(filter)
         .select(planSelectFields)
         .populate("user", userSelectFields)
@@ -84,9 +86,9 @@ export async function getPaidUsers(c) {
         .skip(numSkip)
         .sort({ createdAt: -1, _id: -1 })
         .lean();
-    const final = users.map(({ createdAt, ...user }) => ({
+    const final = users.map(user => ({
         ...user,
-        assistedExpire: new Date(new Date(createdAt).setMonth(createdAt.getMonth() + user.assistedMonths)).toISOString()
+        assistedExpire: new Date(new Date(user.createdAt).setMonth(user.createdAt.getMonth() + user.assistedMonths)).toISOString()
     }));
     return c.json(final);
 }

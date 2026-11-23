@@ -1,7 +1,8 @@
 import { Types } from 'mongoose';
-import { getImgUrl, deleteImg } from '../services/index.js';
+import { getImgUrl, deleteImageByUrl } from '../services/index.js';
 import { UserAccess, User } from '../models/index.js';
 import { getFilterObj, t } from '../utils/index.js';
+import { MAX_GALLERY_IMAGES } from '../utils/enums.js';
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified";
 const currentPlanSelectFields = "-_id subscribedTo expiryDate";
 function withHiddenFlag(profiles, hidden) {
@@ -95,7 +96,7 @@ export const getMatches = async (c) => {
     const select = userSelectFields.split(" ").reduce((acc, field) => ({ ...acc, [field]: 1 }), {});
     const final = await User.aggregate([
         { $match: baseFilters },
-        { $sort: { createdAt: -1 } },
+        { $sort: { createdAt: -1, _id: -1 } },
         { $skip: numSkip },
         { $limit: numLimit },
         { $project: select },
@@ -142,6 +143,7 @@ export const getLikesList = async (c) => {
         path: type,
         select: userSelectFields,
         options: {
+            sort: { _id: -1 },
             limit: numLimit,
             skip: numSkip,
         },
@@ -150,7 +152,6 @@ export const getLikesList = async (c) => {
             select: currentPlanSelectFields,
         },
     })
-        .sort({ createdAt: -1 })
         .lean();
     // @ts-ignore
     return c.json(withHiddenFlag(list?.[type] || [], list?.hidden || []));
@@ -179,7 +180,7 @@ export const addLiked = async (c) => {
     const { userId } = c.req.valid("json");
     const { _id } = c.get("user");
     const type = "liked";
-    const updateObj = { $push: { [type]: userId } };
+    const updateObj = { $addToSet: { [type]: userId } };
     await User.updateOne({ _id }, updateObj);
     return c.json({ message: t(c, "likedAdded") });
 };
@@ -199,6 +200,7 @@ export const getHiddenList = async (c) => {
         path: "hidden",
         select: userSelectFields,
         options: {
+            sort: { _id: -1 },
             limit: Number(limit || 10),
             skip: Number(skip || 0),
         },
@@ -228,30 +230,81 @@ export const updateProfile = async (c) => {
     const payload = c.req.valid("json");
     const user = c.get("user");
     const _id = user.role === "user" ? user._id : payload._id;
+    const newHoroscopePic = payload.vedicHoroscope?.vedicHoroscopePic;
+    if (payload.profileImg || newHoroscopePic) {
+        const owner = await User.findById(_id).select("images vedicHoroscope.vedicHoroscopePic").lean();
+        if (!owner)
+            return c.json({ message: t(c, "userNotFound") }, 404);
+        const ownsProfileImg = !payload.profileImg || !!owner.images?.includes(payload.profileImg);
+        const ownsHoroscopePic = !newHoroscopePic || owner.vedicHoroscope?.vedicHoroscopePic === newHoroscopePic;
+        if (!ownsProfileImg || !ownsHoroscopePic)
+            return c.json({ message: t(c, "imageNotFound") }, 400);
+    }
     await User.updateOne({ _id }, payload);
     return c.json({ message: t(c, "userDetailsUpdated") });
 };
 export const imgUpload = async (c) => {
     const formData = c.req.valid("form");
     const user = c.get('user');
-    const isProfilePic = formData.isProfilePic;
-    const images = formData.images;
-    const _id = user.role === "user" ? user._id : formData._id;
-    const uploadedImages = await Promise.all(images.map(async (image) => await getImgUrl(image, _id)));
-    const updateQuery = {
-        $push: {
-            images: { $each: uploadedImages }
-        }
-    };
-    if (isProfilePic) {
-        updateQuery.profileImg = uploadedImages[0];
+    const target = formData.target ?? (formData.isProfilePic ? "profile" : "gallery");
+    const _id = user.role === "user" ? user._id.toString() : formData._id;
+    if (!_id)
+        return c.json({ message: t(c, "userNotFound") }, 400);
+    const existing = await User.findById(_id).select("images profileImg vedicHoroscope.vedicHoroscopePic").lean();
+    if (!existing)
+        return c.json({ message: t(c, "userNotFound") }, 404);
+    const galleryCount = existing.images?.length ?? 0;
+    const images = target === "gallery" ? formData.images : formData.images.slice(0, 1);
+    if (target === "gallery" && galleryCount + images.length > MAX_GALLERY_IMAGES) {
+        return c.json({ message: t(c, "galleryLimitReached") }, 400);
     }
-    await User.updateOne({ _id }, updateQuery);
-    return c.json({ message: t(c, "userImageUploaded") });
+    const urls = await Promise.all(images.map(image => getImgUrl(image, _id)));
+    if (target === "horoscope") {
+        const previous = existing.vedicHoroscope?.vedicHoroscopePic;
+        await User.updateOne({ _id }, { "vedicHoroscope.vedicHoroscopePic": urls[0] });
+        if (previous && !existing.images?.includes(previous)) {
+            await deleteImageByUrl(previous).catch(() => null);
+        }
+    }
+    else if (target === "profile") {
+        // A full gallery keeps its photos; the new profile picture lives outside it.
+        const addToGallery = galleryCount < MAX_GALLERY_IMAGES;
+        await User.updateOne({ _id }, {
+            profileImg: urls[0],
+            ...(addToGallery && { $push: { images: urls[0] } }),
+        });
+        const previous = existing.profileImg;
+        if (previous && !existing.images?.includes(previous) && previous !== existing.vedicHoroscope?.vedicHoroscopePic) {
+            await deleteImageByUrl(previous).catch(() => null);
+        }
+    }
+    else {
+        await User.updateOne({ _id }, { $push: { images: { $each: urls } } });
+    }
+    return c.json({ message: t(c, "userImageUploaded"), urls });
 };
 export const imgDelete = async (c) => {
-    const { _id } = c.req.valid("param");
-    await deleteImg(_id);
+    const { url, _id: targetId } = c.req.valid("json");
+    const user = c.get('user');
+    const _id = user.role === "user" ? user._id.toString() : targetId;
+    if (!_id)
+        return c.json({ message: t(c, "userNotFound") }, 400);
+    const owner = await User.findById(_id).select("images profileImg vedicHoroscope.vedicHoroscopePic").lean();
+    const isOwned = !!owner && (owner.images?.includes(url) ||
+        owner.profileImg === url ||
+        owner.vedicHoroscope?.vedicHoroscopePic === url);
+    if (!isOwned)
+        return c.json({ message: t(c, "imageNotFound") }, 404);
+    const update = { $pull: { images: url } };
+    const unset = {};
+    if (owner.profileImg === url)
+        unset.profileImg = "";
+    if (owner.vedicHoroscope?.vedicHoroscopePic === url)
+        unset["vedicHoroscope.vedicHoroscopePic"] = "";
+    if (Object.keys(unset).length)
+        update.$unset = unset;
+    await User.updateOne({ _id }, update);
+    await deleteImageByUrl(url).catch(() => null);
     return c.json({ message: t(c, "imageDeleted") });
 };
 export const unlockProfile = async (c) => {

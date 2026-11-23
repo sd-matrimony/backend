@@ -1,5 +1,6 @@
-import { randFullName, randEmail, randPassword, randNumber, randPhoneNumber, randStreetAddress, randBetweenDate, randCompanyName, randWord, randBoolean, randText, randCity, rand, } from "@ngneat/falso";
+import { randFullName, randNumber, randStreetAddress, randBetweenDate, randCompanyName, randWord, randBoolean, randText, randCity, rand, } from "@ngneat/falso";
 import { readFile } from "fs/promises";
+import { Types } from "mongoose";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import educationLevels from "../assets/v1/education-levels.json" with { type: "json" };
@@ -11,11 +12,13 @@ import nakshatra from "../assets/v1/nakshatra.json" with { type: "json" };
 import sectors from "../assets/v1/sectors.json" with { type: "json" };
 import castes from "../assets/v4/castes.json" with { type: "json" };
 import raasi from "../assets/v1/raasi.json" with { type: "json" };
-import { approvalStatuses, maritalStatuses, genders } from "../utils/index.js";
+import { maritalStatuses, genders } from "../utils/index.js";
+import { hashPassword } from "../utils/password.js";
 import { getImgUrl } from "../services/cloudinary.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const imagesRoot = join(__dirname, "../../../images");
-const generateRandomUser = async () => {
+const imagesRoot = join(__dirname, "../../../a");
+const FAKER_PASSWORD = "Faker@123";
+const generateRandomUser = async (index, batch, password, createdAt) => {
     const gender = rand(genders);
     const noOfBrothers = randNumber({ min: 0, max: 5 });
     const noOfSisters = randNumber({ min: 0, max: 5 });
@@ -27,7 +30,8 @@ const generateRandomUser = async () => {
     const imgPath = join(imagesRoot, genderFolder, `${genderFolder}${imgNum}.jpg`);
     const imgBuffer = await readFile(imgPath);
     const imgBlob = new Blob([imgBuffer], { type: "image/jpeg" });
-    const profileImg = await getImgUrl(imgBlob);
+    const _id = new Types.ObjectId();
+    const profileImg = await getImgUrl(imgBlob, _id.toString());
     const sector = rand(sectors);
     const profession = sector === "Unemployed" ? "Unemployed" : rand(professions);
     const salary = sector === "Unemployed" ? 0 : randNumber({ min: 10000, max: 150000 });
@@ -39,15 +43,18 @@ const generateRandomUser = async () => {
     const maxDOB = new Date(now.getFullYear() - 21, now.getMonth(), now.getDate());
     const dob = randBetweenDate({ from: minDOB, to: maxDOB });
     return {
+        _id,
+        createdAt,
+        updatedAt: createdAt,
         fullName: randFullName({ gender: gender.toLowerCase(), withAccents: false }),
-        email: randEmail(),
-        password: randPassword(),
+        email: `faker.${batch}.${index}@example.com`,
+        password,
         maritalStatus: rand(maritalStatuses),
-        isMarried: randBoolean(),
+        isMarried: false,
         gender,
         dob,
         contactDetails: {
-            mobile: randPhoneNumber({ countryCode: "IN" }),
+            mobile: `9${String(randNumber({ min: 0, max: 999_999_999 })).padStart(9, "0")}`,
             address: randStreetAddress(),
             place: randCity(),
         },
@@ -69,7 +76,7 @@ const generateRandomUser = async () => {
             isFatherAlive: randBoolean(),
             isMotherAlive: randBoolean(),
         },
-        approvalStatus: rand(approvalStatuses),
+        approvalStatus: "approved",
         vedicHoroscope: {
             nakshatra: rand(nakshatra).split(" (")[0],
             rasi: rand(raasi).split(" (")[0],
@@ -97,4 +104,9 @@ const generateRandomUser = async () => {
         },
     };
 };
-export const randomUsers = () => Promise.all(Array.from({ length: 200 }, () => generateRandomUser()));
+export const randomUsers = async (count) => {
+    const batch = Date.now().toString(36);
+    const password = await hashPassword(FAKER_PASSWORD);
+    const now = Date.now();
+    return Promise.all(Array.from({ length: count }, (_, i) => generateRandomUser(i, batch, password, new Date(now - i * 60_000))));
+};
