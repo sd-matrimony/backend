@@ -44,6 +44,8 @@ export const maritalStatuses = ["Single", "Divorced", "Widowed"] as const
 export const genders = ["Male", "Female"] as const // "Other"
 export const roles = ["user", "admin", "super-admin"] as const // "Other"
 
+export const MAX_GALLERY_IMAGES = 4
+
 export const plans = ['basic', 'gold', 'diamond', 'platinum'] as const
 export type plansT = typeof plans[number]
 

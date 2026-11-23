@@ -46,6 +46,7 @@ export const hideProfileSchema = z.object({
 })
 
 export const updateProfileSchema = userSchema.omit({
+  images: true,
   email: true,
   password: true,
   role: true,

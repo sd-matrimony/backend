@@ -4,7 +4,7 @@ import educationLevels from "../assets/v1/education-levels.json" with { type: "j
 import nakshatra from "../assets/v1/nakshatra.json" with { type: "json" };
 import raasi from "../assets/v1/raasi.json" with { type: "json" };
 
-import { approvalStatuses, genders, maritalStatuses, plans, roles } from '../utils/enums.js';
+import { MAX_GALLERY_IMAGES, approvalStatuses, genders, maritalStatuses, plans, roles } from '../utils/enums.js';
 import { MIN_AGE, isValidDob } from '../utils/index.js';
 
 export const approvalStatusEnum = z.enum(approvalStatuses, { error: "Invalid Approval Status" })
@@ -134,11 +134,13 @@ export const partnerPreferencesSchema = z.object({
   .optional()
 
 export const userSchema = z.object({
-  dob: z.iso.datetime(),
+  dob: z.iso.datetime({
+    error: (issue) => issue.input === undefined || issue.input === "" ? "Date of birth is required" : "Invalid date of birth",
+  }),
   gender: genderEnum,
   role: z.literal("user"),
   email: emailSchema.optional(),
-  images: z.array(z.url()).optional(),
+  images: z.array(z.url()).max(MAX_GALLERY_IMAGES, `Maximum ${MAX_GALLERY_IMAGES} images are allowed`).optional(),
   password: passwordSchema,
   fullName: z.string("Name is required").min(3, "Name must be at least 3 characters"),
   profileImg: z.union([z.url(), z.literal("")]).optional(),

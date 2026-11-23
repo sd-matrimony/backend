@@ -8,6 +8,7 @@ import { getImgUrl, deleteImageByUrl } from '../services/index.js';
 import { UserAccess, User } from '../models/index.js';
 
 import { getFilterObj, t } from '../utils/index.js';
+import { MAX_GALLERY_IMAGES } from '../utils/enums.js';
 
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified"
 const currentPlanSelectFields = "-_id subscribedTo expiryDate"
@@ -284,6 +285,17 @@ export const updateProfile = async (c: zContext<{ json: typeof updateProfileSche
   const user = c.get("user")
 
   const _id = user.role === "user" ? user._id : payload._id
+  const newHoroscopePic = payload.vedicHoroscope?.vedicHoroscopePic
+
+  if (payload.profileImg || newHoroscopePic) {
+    const owner = await User.findById(_id).select("images vedicHoroscope.vedicHoroscopePic").lean()
+    if (!owner) return c.json({ message: t(c, "userNotFound") }, 404)
+
+    const ownsProfileImg = !payload.profileImg || !!owner.images?.includes(payload.profileImg)
+    const ownsHoroscopePic = !newHoroscopePic || owner.vedicHoroscope?.vedicHoroscopePic === newHoroscopePic
+    if (!ownsProfileImg || !ownsHoroscopePic) return c.json({ message: t(c, "imageNotFound") }, 400)
+  }
+
   await User.updateOne({ _id }, payload)
 
   return c.json({ message: t(c, "userDetailsUpdated") })
@@ -297,22 +309,39 @@ export const imgUpload = async (c: zContext<{ form: typeof imgUploadSchema }>) =
   const _id = user.role === "user" ? user._id.toString() : formData._id
   if (!_id) return c.json({ message: t(c, "userNotFound") }, 400)
 
-  const images = target === "horoscope" ? formData.images.slice(0, 1) : formData.images
+  const existing = await User.findById(_id).select("images profileImg vedicHoroscope.vedicHoroscopePic").lean()
+  if (!existing) return c.json({ message: t(c, "userNotFound") }, 404)
+
+  const galleryCount = existing.images?.length ?? 0
+  const images = target === "gallery" ? formData.images : formData.images.slice(0, 1)
+  if (target === "gallery" && galleryCount + images.length > MAX_GALLERY_IMAGES) {
+    return c.json({ message: t(c, "galleryLimitReached") }, 400)
+  }
+
   const urls = await Promise.all(images.map(image => getImgUrl(image, _id)))
 
   if (target === "horoscope") {
-    const existing = await User.findById(_id).select("images vedicHoroscope.vedicHoroscopePic").lean()
-    const previous = existing?.vedicHoroscope?.vedicHoroscopePic
+    const previous = existing.vedicHoroscope?.vedicHoroscopePic
 
     await User.updateOne({ _id }, { "vedicHoroscope.vedicHoroscopePic": urls[0] })
 
-    if (previous && !existing?.images?.includes(previous)) {
+    if (previous && !existing.images?.includes(previous)) {
+      await deleteImageByUrl(previous).catch(() => null)
+    }
+  } else if (target === "profile") {
+    // A full gallery keeps its photos; the new profile picture lives outside it.
+    const addToGallery = galleryCount < MAX_GALLERY_IMAGES
+    await User.updateOne({ _id }, {
+      profileImg: urls[0],
+      ...(addToGallery && { $push: { images: urls[0] } }),
+    })
+
+    const previous = existing.profileImg
+    if (previous && !existing.images?.includes(previous) && previous !== existing.vedicHoroscope?.vedicHoroscopePic) {
       await deleteImageByUrl(previous).catch(() => null)
     }
   } else {
-    const updateQuery: Record<string, unknown> = { $push: { images: { $each: urls } } }
-    if (target === "profile") updateQuery.profileImg = urls[0]
-    await User.updateOne({ _id }, updateQuery)
+    await User.updateOne({ _id }, { $push: { images: { $each: urls } } })
   }
 
   return c.json({ message: t(c, "userImageUploaded"), urls })
