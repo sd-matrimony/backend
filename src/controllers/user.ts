@@ -5,7 +5,7 @@ import type { _idParamSchema, imgUploadSchema, imgDeleteSchema, matchedUsersSche
 import type { zContext } from '../types/index.js';
 
 import { getImgUrl, deleteImageByUrl } from '../services/index.js';
-import { UserAccess, User } from '../models/index.js';
+import { UserAccess, User, Payment } from '../models/index.js';
 
 import { getFilterObj, t } from '../utils/index.js';
 import { MAX_GALLERY_IMAGES } from '../utils/enums.js';
@@ -82,6 +82,17 @@ export const getCurrentPlan = async (c: Context<Env>) => {
   }
 
   return c.json(payload)
+}
+
+export const getMyPayments = async (c: Context<Env>) => {
+  const { _id } = c.get("user")
+
+  const payments = await Payment.find({ user: _id })
+    .select("_id amount subscribedTo noOfProfilesCanView isAssisted assistedMonths expiryDate createdAt orderId")
+    .sort({ createdAt: -1, _id: -1 })
+    .lean()
+
+  return c.json(payments)
 }
 
 export const getPartnerPreferences = async (c: Context<Env>) => {
