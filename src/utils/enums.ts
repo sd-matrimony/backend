@@ -57,16 +57,16 @@ export const planValidityMonths: Record<plansT, number> = {
 } as const
 
 export const planPrices: Record<plansT, number> = {
-  basic: 1_500,
-  gold: 3_200,
-  diamond: 5_500,
-  platinum: 7_000,
+  basic: 1_999,
+  gold: 3_999,
+  diamond: 5_999,
+  platinum: 7_999,
 } as const
 
 export const profilesCount: Record<plansT, number> = {
-  basic: 20,
-  gold: 45,
-  diamond: 70,
+  basic: 25,
+  gold: 50,
+  diamond: 75,
   platinum: 100,
 }
 
