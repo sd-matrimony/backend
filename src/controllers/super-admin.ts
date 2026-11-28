@@ -3,10 +3,12 @@ import type { Context } from "hono";
 import type {
   skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema,
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
-  resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
+  resetPassByAdminSchema, mkePaymentSchema, extendPlanSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
   activeUsersSchema, paidUsersSchema, dashboardStatsSchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
+
+import { redisClient } from "../services/connect-redis.js";
 
 import { Payment, User, Admin, UserAccess } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
@@ -469,6 +471,27 @@ export async function removeUserPlan(c: zContext<{ param: typeof _idParamSchema 
   await User.updateOne({ _id }, { $unset: { currentPlan: 1 } })
 
   return c.json({ message: t(c, "subscriptionRemoved") })
+}
+
+export async function extendUserPlan(c: zContext<{ param: typeof _idParamSchema, json: typeof extendPlanSchema }>) {
+  const { _id } = c.req.valid("param")
+  const { days } = c.req.valid("json")
+
+  const user = await User.findById(_id).select("currentPlan").lean()
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
+  if (!user.currentPlan) return c.json({ message: t(c, "noActivePlan") }, 400)
+
+  const payment = await Payment.findById(user.currentPlan).select("expiryDate")
+  if (!payment) return c.json({ message: t(c, "noActivePlan") }, 400)
+
+  const now = new Date()
+  const base = payment.expiryDate && payment.expiryDate > now ? payment.expiryDate : now
+  payment.expiryDate = new Date(base.getTime() + days * 24 * 60 * 60 * 1000)
+  await payment.save()
+
+  await redisClient.del(`user:${_id}`)
+
+  return c.json({ expiryDate: payment.expiryDate })
 }
 
 export async function updateInvited(c: zContext<{ param: typeof _idParamSchema }>) {

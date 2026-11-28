@@ -56,6 +56,7 @@ const en = {
   profileUnlocked: "Profile unlocked successfully",
 
   subscriptionRemoved: "Subscription removed successfully",
+  noActivePlan: "User has no plan to extend",
   userInvited: "User invited successfully",
   adminExists: "Admin already exists",
   adminCreated: "Admin created successfully",
@@ -122,6 +123,7 @@ const ta: Record<MessageKey, string> = {
   profileUnlocked: "சுயவிவரம் திறக்கப்பட்டது",
 
   subscriptionRemoved: "சந்தா நீக்கப்பட்டது",
+  noActivePlan: "நீட்டிக்க பயனருக்கு திட்டம் இல்லை",
   userInvited: "பயனர் அழைக்கப்பட்டார்",
   adminExists: "நிர்வாகி ஏற்கனவே உள்ளார்",
   adminCreated: "நிர்வாகி உருவாக்கப்பட்டார்",

@@ -7,6 +7,7 @@ import {
   updateAdmin, getUsersInvitations, updateInvited, resetPass,
   makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
   updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles,
+  extendUserPlan,
 } from "../controllers/super-admin.js";
 
 import {
@@ -14,7 +15,7 @@ import {
   _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema,
   usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema,
   mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
-  activeUsersSchema, paidUsersSchema, dashboardStatsSchema,
+  activeUsersSchema, paidUsersSchema, dashboardStatsSchema, extendPlanSchema,
 } from "../validations/index.js";
 
 import roleCheck from "../middlewares/role-check.js";
@@ -43,6 +44,7 @@ superAdminRoutes
   .post("/user/payment", zv("json", mkePaymentSchema), makePaymentForUser)
   .put("/admin/:_id", zv("param", _idParamSchema), zv("json", adminUpdateSchema), updateAdmin)
   .put("/user/password/:_id", zv("param", _idParamSchema), zv("json", resetPassByAdminSchema), resetPass)
+  .put("/user/:_id/plan/extend", zv("param", _idParamSchema), zv("json", extendPlanSchema), extendUserPlan)
   .put("/user/invite/:_id", zv("param", _idParamSchema), updateInvited)
   .put("/user/critical/:_id", zv("param", _idParamSchema), zv("json", updateUserCriticalSchema), updateUserCritical)
   .put("/users/bulk", zv("json", bulkUpdateUsersSchema), bulkUpdateUsers)

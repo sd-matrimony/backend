@@ -87,3 +87,7 @@ export const mkePaymentSchema = z.object({
   isAssisted: z.boolean("Is assisted is required"),
   assistedMonths: z.number("Assisted months is required"),
 })
+
+export const extendPlanSchema = z.object({
+  days: z.number("Days is required").int("Days must be a whole number").min(1, "Days must be at least 1").max(365, "Days must be at most 365"),
+})

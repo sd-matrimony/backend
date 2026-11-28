@@ -157,3 +157,13 @@ Content-Type: application/json
   }
 ]
 
+
+
+### extend user plan
+PUT {{host}}/user/68942a49660c9ca1bf10293c/plan/extend
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "days": 15
+}
