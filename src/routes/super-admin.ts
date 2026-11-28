@@ -8,6 +8,7 @@ import {
   makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
   updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles,
   extendUserPlan, getPaymentUsers, getUserPayments, deleteUserPayment,
+  addUserProfiles, getUserPaymentLogs,
 } from "../controllers/super-admin.js";
 
 import {
@@ -16,7 +17,7 @@ import {
   usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema,
   mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
   activeUsersSchema, paidUsersSchema, dashboardStatsSchema, extendPlanSchema,
-  paymentUsersSchema, unlockedProfilesQuerySchema,
+  paymentUsersSchema, unlockedProfilesQuerySchema, addProfilesSchema, reasonQuerySchema,
 } from "../validations/index.js";
 
 import roleCheck from "../middlewares/role-check.js";
@@ -41,14 +42,16 @@ superAdminRoutes
   .get("/payments/users", zv("query", paymentUsersSchema), getPaymentUsers)
   .get("/user/:_id/payments", zv("param", _idParamSchema), getUserPayments)
   .get("/user/:_id/unlocked", zv("param", _idParamSchema), zv("query", unlockedProfilesQuerySchema), getUserUnlockedProfiles)
-  .delete("/user/:_id/plan", zv("param", _idParamSchema), removeUserPlan)
-  .delete("/payment/:_id", zv("param", _idParamSchema), deleteUserPayment)
+  .get("/user/:_id/payment-logs", zv("param", _idParamSchema), getUserPaymentLogs)
+  .delete("/user/:_id/plan", zv("param", _idParamSchema), zv("query", reasonQuerySchema), removeUserPlan)
+  .delete("/payment/:_id", zv("param", _idParamSchema), zv("query", reasonQuerySchema), deleteUserPayment)
   .get("/admins", getAdmins)
   .post("/admin", zv("json", adminCreateSchema), createAdmin)
   .post("/user/payment", zv("json", mkePaymentSchema), makePaymentForUser)
   .put("/admin/:_id", zv("param", _idParamSchema), zv("json", adminUpdateSchema), updateAdmin)
   .put("/user/password/:_id", zv("param", _idParamSchema), zv("json", resetPassByAdminSchema), resetPass)
   .put("/user/:_id/plan/extend", zv("param", _idParamSchema), zv("json", extendPlanSchema), extendUserPlan)
+  .put("/user/:_id/plan/profiles", zv("param", _idParamSchema), zv("json", addProfilesSchema), addUserProfiles)
   .put("/user/invite/:_id", zv("param", _idParamSchema), updateInvited)
   .put("/user/critical/:_id", zv("param", _idParamSchema), zv("json", updateUserCriticalSchema), updateUserCritical)
   .put("/users/bulk", zv("json", bulkUpdateUsersSchema), bulkUpdateUsers)

@@ -6,18 +6,18 @@ import type {
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
   resetPassByAdminSchema, mkePaymentSchema, extendPlanSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
   activeUsersSchema, paidUsersSchema, dashboardStatsSchema,
-  paymentUsersSchema, unlockedProfilesQuerySchema,
+  paymentUsersSchema, unlockedProfilesQuerySchema, addProfilesSchema, reasonQuerySchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
 import { redisClient } from "../services/connect-redis.js";
 
-import { Payment, User, Admin, UserAccess } from "../models/index.js";
+import { Payment, User, Admin, UserAccess, PaymentLog } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
 import { onPaid, syncUnlockExpiry } from "./payment.js";
-import { getPlanPricing } from "../utils/plan-pricing.js";
+import { getPlanPricing, UNLIMITED_PROFILES } from "../utils/plan-pricing.js";
 
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt"
 const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
@@ -468,18 +468,36 @@ export async function getUsersInvitations(c: zContext<{ query: typeof findUsersS
   return c.json(users)
 }
 
-export async function removeUserPlan(c: zContext<{ param: typeof _idParamSchema }>) {
+export async function removeUserPlan(c: zContext<{ param: typeof _idParamSchema, query: typeof reasonQuerySchema }>) {
   const { _id } = c.req.valid("param")
+  const { reason } = c.req.valid("query") || {}
+  const admin = c.get("user")
+
+  const user = await User.findById(_id).select("currentPlan").lean()
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
 
   await User.updateOne({ _id }, { $unset: { currentPlan: 1 } })
   await redisClient.del(`user:${_id}`)
+
+  if (user.currentPlan) {
+    const payment = await Payment.findById(user.currentPlan).select("subscribedTo amount expiryDate").lean()
+    await PaymentLog.create({
+      user: _id,
+      payment: user.currentPlan,
+      admin: admin._id,
+      action: "cancelled",
+      details: { subscribedTo: payment?.subscribedTo, amount: payment?.amount, previousExpiry: payment?.expiryDate },
+      reason,
+    })
+  }
 
   return c.json({ message: t(c, "subscriptionRemoved") })
 }
 
 export async function extendUserPlan(c: zContext<{ param: typeof _idParamSchema, json: typeof extendPlanSchema }>) {
   const { _id } = c.req.valid("param")
-  const { days } = c.req.valid("json")
+  const { days, reason } = c.req.valid("json")
+  const admin = c.get("user")
 
   const user = await User.findById(_id).select("currentPlan").lean()
   if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
@@ -489,14 +507,68 @@ export async function extendUserPlan(c: zContext<{ param: typeof _idParamSchema,
   if (!payment) return c.json({ message: t(c, "noActivePlan") }, 400)
 
   const now = new Date()
-  const base = payment.expiryDate && payment.expiryDate > now ? payment.expiryDate : now
+  const previousExpiry = payment.expiryDate
+  const base = previousExpiry && previousExpiry > now ? previousExpiry : now
   payment.expiryDate = new Date(base.getTime() + days * 24 * 60 * 60 * 1000)
   await payment.save()
   await syncUnlockExpiry(_id, payment.expiryDate)
 
   await redisClient.del(`user:${_id}`)
 
+  await PaymentLog.create({
+    user: _id,
+    payment: payment._id,
+    admin: admin._id,
+    action: "extended",
+    details: { days, previousExpiry, newExpiry: payment.expiryDate },
+    reason,
+  })
+
   return c.json({ expiryDate: payment.expiryDate })
+}
+
+export async function addUserProfiles(c: zContext<{ param: typeof _idParamSchema, json: typeof addProfilesSchema }>) {
+  const { _id } = c.req.valid("param")
+  const { count, reason } = c.req.valid("json")
+  const admin = c.get("user")
+
+  const user = await User.findById(_id).select("currentPlan").lean()
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
+  if (!user.currentPlan) return c.json({ message: t(c, "noActivePlan") }, 400)
+
+  const payment = await Payment.findById(user.currentPlan).select("noOfProfilesCanView")
+  if (!payment) return c.json({ message: t(c, "noActivePlan") }, 400)
+
+  const previousProfiles = payment.noOfProfilesCanView ?? 0
+  if (previousProfiles >= UNLIMITED_PROFILES) return c.json({ message: t(c, "alreadyUnlimited") }, 400)
+
+  payment.noOfProfilesCanView = Math.min(previousProfiles + count, UNLIMITED_PROFILES)
+  await payment.save()
+  await redisClient.del(`user:${_id}`)
+
+  await PaymentLog.create({
+    user: _id,
+    payment: payment._id,
+    admin: admin._id,
+    action: "profilesAdded",
+    details: { profiles: count, previousProfiles, newProfiles: payment.noOfProfilesCanView },
+    reason,
+  })
+
+  return c.json({ noOfProfilesCanView: payment.noOfProfilesCanView })
+}
+
+export async function getUserPaymentLogs(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+  if (!isValidObjectId(_id)) return c.json([])
+
+  const logs = await PaymentLog.find({ user: _id })
+    .populate("admin", "fullName")
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .lean()
+
+  return c.json(logs)
 }
 
 function escapeRegex(value: string) {
@@ -591,11 +663,13 @@ export async function getUserPayments(c: zContext<{ param: typeof _idParamSchema
   })
 }
 
-export async function deleteUserPayment(c: zContext<{ param: typeof _idParamSchema }>) {
+export async function deleteUserPayment(c: zContext<{ param: typeof _idParamSchema, query: typeof reasonQuerySchema }>) {
   const { _id } = c.req.valid("param")
+  const { reason } = c.req.valid("query") || {}
+  const admin = c.get("user")
   if (!isValidObjectId(_id)) return c.json({ message: t(c, "paymentNotFound") }, 404)
 
-  const payment = await Payment.findById(_id).select("_id user").lean()
+  const payment = await Payment.findById(_id).select("_id user subscribedTo amount expiryDate").lean()
   if (!payment) return c.json({ message: t(c, "paymentNotFound") }, 404)
 
   await Promise.all([
@@ -616,7 +690,17 @@ export async function deleteUserPayment(c: zContext<{ param: typeof _idParamSche
     )
   }
 
-  if (payment.user) await redisClient.del(`user:${payment.user}`)
+  if (payment.user) {
+    await redisClient.del(`user:${payment.user}`)
+    await PaymentLog.create({
+      user: payment.user,
+      payment: payment._id,
+      admin: admin._id,
+      action: "deleted",
+      details: { subscribedTo: payment.subscribedTo, amount: payment.amount, previousExpiry: payment.expiryDate },
+      reason,
+    })
+  }
 
   return c.json({ message: t(c, "paymentDeleted") })
 }
@@ -743,6 +827,15 @@ export async function makePaymentForUser(c: zContext<{ json: typeof mkePaymentSc
   if (!pricing.ok) return c.json({ message: t(c, pricing.error) }, 400)
 
   const payment = await onPaid({ _id, role: "user" }, { ...body, assistedMonths: pricing.assistedMonths, orderId: `by-admin-${Date.now()}` })
+
+  await PaymentLog.create({
+    user: _id,
+    payment: payment._id,
+    admin: c.get("user")._id,
+    action: "created",
+    details: { subscribedTo: payment.subscribedTo, amount: payment.amount, newExpiry: payment.expiryDate, newProfiles: payment.noOfProfilesCanView },
+  })
+
   return c.json({ subscribedTo: payment.subscribedTo, expiryDate: payment.expiryDate })
 }
 

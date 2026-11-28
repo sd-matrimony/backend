@@ -88,9 +88,21 @@ export const mkePaymentSchema = z.object({
   assistedMonths: z.number("Assisted months is required"),
 })
 
+const reasonSchema = z.string().trim().max(300, "Reason must be at most 300 characters").optional()
+
 export const extendPlanSchema = z.object({
   days: z.number("Days is required").int("Days must be a whole number").min(1, "Days must be at least 1").max(365, "Days must be at most 365"),
+  reason: reasonSchema,
 })
+
+export const addProfilesSchema = z.object({
+  count: z.number("Count is required").int("Count must be a whole number").min(1, "Count must be at least 1").max(500, "Count must be at most 500"),
+  reason: reasonSchema,
+})
+
+export const reasonQuerySchema = z.object({
+  reason: reasonSchema,
+}).optional()
 
 export const paymentUsersSchema = z.object({
   skip: z.coerce.number().optional().default(0),
