@@ -694,12 +694,16 @@ export async function getPaymentUsers(c: zContext<{ query: typeof paymentUsersSc
   if (status === "expired") match.$nor = [{ "currentPlan.expiryDate": { $gt: now } }]
 
   const users = await Payment.aggregate([
+    { $sort: { expiryDate: -1 } },
     {
       $group: {
         _id: "$user",
         paymentsCount: { $sum: 1 },
         totalAmount: { $sum: "$amount" },
         lastPaidAt: { $max: "$createdAt" },
+        latestPlan: {
+          $first: { _id: "$_id", subscribedTo: "$subscribedTo", expiryDate: "$expiryDate", noOfProfilesCanView: "$noOfProfilesCanView" },
+        },
       },
     },
     {
@@ -726,7 +730,29 @@ export async function getPaymentUsers(c: zContext<{ query: typeof paymentUsersSc
     { $sort: { lastPaidAt: -1, _id: -1 } },
     { $skip: skip },
     { $limit: limit },
-    { $project: { "user.currentPlan": 0 } },
+    {
+      $lookup: {
+        from: UserAccess.collection.name,
+        localField: "_id",
+        foreignField: "viewer",
+        as: "unlocks",
+        pipeline: [{ $project: { payment: 1 } }],
+      },
+    },
+    {
+      $addFields: {
+        unlockedCount: { $size: "$unlocks" },
+        currentUnlocked: {
+          $size: {
+            $filter: {
+              input: "$unlocks",
+              cond: { $eq: ["$$this.payment", { $ifNull: ["$currentPlan._id", "$latestPlan._id"] }] },
+            },
+          },
+        },
+      },
+    },
+    { $project: { "user.currentPlan": 0, unlocks: 0 } },
   ])
 
   return c.json(users)
