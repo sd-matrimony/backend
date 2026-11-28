@@ -189,7 +189,6 @@ export const createOrder = async (c: zContext<{ json: typeof createOrderSchema }
   if (!pricing.ok) return c.json({ message: t(c, pricing.error) }, 400)
 
   const { amount } = pricing
-  const authToken = await getToken()
 
   const merchantOrderId = `Tx-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`
   const orderBody = {
@@ -208,9 +207,18 @@ export const createOrder = async (c: zContext<{ json: typeof createOrderSchema }
     }
   }
 
-  const { data } = await axios.post(phonepayEndpoints.createOrder, orderBody, {
-    headers: { "Authorization": `O-Bearer ${authToken}` }
-  })
+  let data: { orderId?: string, redirectUrl?: string, state?: string }
+  try {
+    const authToken = await getToken()
+    const response = await axios.post(phonepayEndpoints.createOrder, orderBody, {
+      headers: { "Authorization": `O-Bearer ${authToken}` }
+    })
+    data = response.data
+  } catch (error) {
+    if (!axios.isAxiosError(error)) throw error
+    console.log("PhonePe create order failed", error.response?.status)
+    return c.json({ message: t(c, "paymentServiceBusy") }, 503)
+  }
 
   await Order.create({
     user: _id,
@@ -233,7 +241,14 @@ export const verifyPayment = async (c: zContext<{ json: typeof verifyPaymentSche
   const order = await Order.findOne({ merchantOrderId, user: _id })
   if (!order) return c.json({ message: t(c, "orderNotFound") }, 404)
 
-  const result = await settleOrder(order)
+  let result: Awaited<ReturnType<typeof settleOrder>>
+  try {
+    result = await settleOrder(order)
+  } catch (error) {
+    if (!axios.isAxiosError(error)) throw error
+    console.log("PhonePe status check failed", error.response?.status)
+    return c.json({ message: t(c, "paymentCheckFailed") }, 503)
+  }
 
   if (result.status !== "completed") {
     const errorKeys = { pending: "paymentPending", failed: "paymentFailed", mismatch: "paymentAmountMismatch" } as const

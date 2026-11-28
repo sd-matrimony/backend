@@ -81,6 +81,8 @@ const en = {
   alreadyUnlimited: "This plan already has unlimited profiles",
   profilesAdded: "Profiles added successfully",
   invalidWebhook: "Invalid webhook request",
+  paymentServiceBusy: "The payment service is busy right now. Please try again in a moment.",
+  paymentCheckFailed: "We couldn't confirm your payment right now. If money was deducted, your plan will be activated automatically within a few minutes.",
   internalServerError: "Internal server error",
 } as const;
 
@@ -159,6 +161,8 @@ const ta: Record<MessageKey, string> = {
   alreadyUnlimited: "இந்த திட்டத்தில் ஏற்கனவே வரம்பற்ற சுயவிவரங்கள் உள்ளன",
   profilesAdded: "சுயவிவரங்கள் வெற்றிகரமாக சேர்க்கப்பட்டன",
   invalidWebhook: "தவறான webhook கோரிக்கை",
+  paymentServiceBusy: "கட்டண சேவை தற்போது பிஸியாக உள்ளது. சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.",
+  paymentCheckFailed: "உங்கள் கட்டணத்தை இப்போது உறுதிப்படுத்த முடியவில்லை. பணம் கழிக்கப்பட்டிருந்தால், சில நிமிடங்களில் உங்கள் திட்டம் தானாக செயல்படுத்தப்படும்.",
   internalServerError: "உள் சேவையக பிழை",
 };
 
