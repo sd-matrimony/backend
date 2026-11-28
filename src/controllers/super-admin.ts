@@ -562,13 +562,39 @@ export async function getUserPaymentLogs(c: zContext<{ param: typeof _idParamSch
   const { _id } = c.req.valid("param")
   if (!isValidObjectId(_id)) return c.json([])
 
-  const logs = await PaymentLog.find({ user: _id })
-    .populate("admin", "fullName")
-    .sort({ createdAt: -1 })
-    .limit(100)
-    .lean()
+  const [logs, payments] = await Promise.all([
+    PaymentLog.find({ user: _id })
+      .populate("admin", "fullName")
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean(),
+    Payment.find({ user: _id })
+      .select("_id amount subscribedTo expiryDate noOfProfilesCanView orderId createdAt")
+      .lean(),
+  ])
 
-  return c.json(logs)
+  const loggedPayments = new Set(logs.filter(log => log.action === "created").map(log => String(log.payment)))
+
+  const paymentEntries = payments
+    .filter(payment => !loggedPayments.has(String(payment._id)))
+    .map(payment => ({
+      _id: `payment-${payment._id}`,
+      payment: payment._id,
+      action: payment.orderId?.startsWith("by-admin") ? "created" : "purchased",
+      admin: null,
+      createdAt: payment.createdAt,
+      details: {
+        subscribedTo: payment.subscribedTo,
+        amount: payment.amount,
+        newExpiry: payment.expiryDate,
+        newProfiles: payment.noOfProfilesCanView,
+      },
+    }))
+
+  const activity = [...logs, ...paymentEntries]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+  return c.json(activity)
 }
 
 function escapeRegex(value: string) {
@@ -796,6 +822,20 @@ export async function getUserUnlockedProfiles(c: zContext<{ param: typeof _idPar
     .populate("currentPlan", "_id subscribedTo expiryDate noOfProfilesCanView")
     .lean()
   if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
+
+  if (payment === "all") {
+    const list = await UserAccess.find({ viewer: _id })
+      .select("viewed payment createdAt")
+      .populate("viewed", userSelectFields)
+      .sort({ createdAt: -1 })
+      .lean()
+
+    const profiles = list
+      .filter(item => item.viewed)
+      .map(item => ({ ...(item.viewed as object), unlockedAt: item.createdAt, payment: item.payment }))
+
+    return c.json({ plan: null, used: list.length, profiles })
+  }
 
   let plan = (user as any).currentPlan
   if (payment) {
