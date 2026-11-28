@@ -24,6 +24,7 @@ const paymentLogSchema = new Schema({
         subscribedTo: String,
         amount: Number,
         days: Number,
+        months: Number,
         profiles: Number,
         previousExpiry: Date,
         newExpiry: Date,

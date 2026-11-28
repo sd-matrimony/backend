@@ -5,6 +5,7 @@ import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
 import { onPaid, syncUnlockExpiry } from "./payment.js";
+import { addMonths } from "../utils/date.js";
 import { getPlanPricing, UNLIMITED_PROFILES } from "../utils/plan-pricing.js";
 import { getFieldChanges, logUserChanges } from "../utils/user-changes.js";
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt";
@@ -26,7 +27,8 @@ export async function getDashboardStats(c) {
     const startOfMonth = new Date(year, mon - 1, 1);
     const endOfMonth = new Date(year, mon, 1);
     const inMonth = { $and: [{ $gte: ["$createdAt", startOfMonth] }, { $lt: ["$createdAt", endOfMonth] }] };
-    const [revenue, totalUsers, activeToday, active7d, active30d] = await Promise.all([
+    const notDeleted = { isDeleted: { $ne: true } };
+    const [revenue, totalUsers, activeToday, active7d, active30d, paidUserIds, activePlanUsers] = await Promise.all([
         Payment.aggregate([
             {
                 $group: {
@@ -55,11 +57,25 @@ export async function getDashboardStats(c) {
         User.countDocuments({ lastActiveAt: { $gte: daysAgo(1) } }),
         User.countDocuments({ lastActiveAt: { $gte: daysAgo(7) } }),
         User.countDocuments({ lastActiveAt: { $gte: daysAgo(30) } }),
+        Payment.distinct("user"),
+        User.aggregate([
+            { $match: { ...notDeleted, currentPlan: { $ne: null } } },
+            { $lookup: { from: "payments", localField: "currentPlan", foreignField: "_id", as: "plan", pipeline: [{ $project: { expiryDate: 1 } }] } },
+            { $match: { "plan.expiryDate": { $gt: now } } },
+            { $count: "count" },
+        ]),
     ]);
+    const everPaid = await User.countDocuments({ ...notDeleted, _id: { $in: paidUserIds } });
+    const activePlans = activePlanUsers[0]?.count ?? 0;
     const { total = 0, count = 0, online = 0, byAdmin = 0, month: monthTotal = 0, monthCount = 0, today = 0 } = revenue[0] || {};
     return c.json({
         revenue: { total, count, online, byAdmin, month: monthTotal, monthCount, today },
         users: { total: totalUsers, activeToday, active7d, active30d },
+        plans: {
+            active: activePlans,
+            expired: Math.max(everPaid - activePlans, 0),
+            unpaid: Math.max(totalUsers - everPaid, 0),
+        },
     });
 }
 export async function getActiveUsers(c) {
@@ -420,33 +436,59 @@ export async function removeUserPlan(c) {
     }
     return c.json({ message: t(c, "subscriptionRemoved") });
 }
+async function extendPayment(paymentId, adminId, { days, months, reason }) {
+    const payment = await Payment.findById(paymentId).select("user expiryDate");
+    if (!payment?.user)
+        return null;
+    const now = new Date();
+    const previousExpiry = payment.expiryDate;
+    const base = previousExpiry && previousExpiry > now ? previousExpiry : now;
+    payment.expiryDate = months
+        ? addMonths(base, months)
+        : new Date(base.getTime() + (days ?? 0) * 24 * 60 * 60 * 1000);
+    await payment.save();
+    const user = await User.findById(payment.user)
+        .select("currentPlan")
+        .populate("currentPlan", "expiryDate")
+        .lean();
+    const current = user?.currentPlan;
+    const isCurrent = String(current?._id) === String(payment._id);
+    const hasOtherActivePlan = !isCurrent && !!current?.expiryDate && current.expiryDate > now;
+    if (!isCurrent && !hasOtherActivePlan) {
+        await User.updateOne({ _id: payment.user }, { currentPlan: payment._id });
+    }
+    if (!hasOtherActivePlan)
+        await syncUnlockExpiry(payment.user, payment.expiryDate);
+    await redisClient.del(`user:${payment.user}`);
+    await PaymentLog.create({
+        user: payment.user,
+        payment: payment._id,
+        admin: adminId,
+        action: "extended",
+        details: { days, months, previousExpiry, newExpiry: payment.expiryDate },
+        reason,
+    });
+    return payment;
+}
 export async function extendUserPlan(c) {
     const { _id } = c.req.valid("param");
-    const { days, reason } = c.req.valid("json");
-    const admin = c.get("user");
     const user = await User.findById(_id).select("currentPlan").lean();
     if (!user)
         return c.json({ message: t(c, "userNotFound") }, 404);
     if (!user.currentPlan)
         return c.json({ message: t(c, "noActivePlan") }, 400);
-    const payment = await Payment.findById(user.currentPlan).select("expiryDate");
+    const payment = await extendPayment(user.currentPlan, c.get("user")._id, c.req.valid("json"));
     if (!payment)
         return c.json({ message: t(c, "noActivePlan") }, 400);
-    const now = new Date();
-    const previousExpiry = payment.expiryDate;
-    const base = previousExpiry && previousExpiry > now ? previousExpiry : now;
-    payment.expiryDate = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
-    await payment.save();
-    await syncUnlockExpiry(_id, payment.expiryDate);
-    await redisClient.del(`user:${_id}`);
-    await PaymentLog.create({
-        user: _id,
-        payment: payment._id,
-        admin: admin._id,
-        action: "extended",
-        details: { days, previousExpiry, newExpiry: payment.expiryDate },
-        reason,
-    });
+    return c.json({ expiryDate: payment.expiryDate });
+}
+export async function extendPaymentById(c) {
+    const { _id } = c.req.valid("param");
+    if (!isValidObjectId(_id))
+        return c.json({ message: t(c, "paymentNotFound") }, 404);
+    const payment = await extendPayment(_id, c.get("user")._id, c.req.valid("json"));
+    if (!payment)
+        return c.json({ message: t(c, "paymentNotFound") }, 404);
     return c.json({ expiryDate: payment.expiryDate });
 }
 export async function addUserProfiles(c) {

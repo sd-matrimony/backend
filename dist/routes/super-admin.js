@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles, extendUserPlan, getPaymentUsers, getUserPayments, deleteUserPayment, addUserProfiles, getUserPaymentLogs, getUserHistory, } from "../controllers/super-admin.js";
+import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles, extendUserPlan, getPaymentUsers, getUserPayments, deleteUserPayment, addUserProfiles, getUserPaymentLogs, getUserHistory, extendPaymentById, } from "../controllers/super-admin.js";
 import { skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema, activeUsersSchema, paidUsersSchema, dashboardStatsSchema, extendPlanSchema, paymentUsersSchema, unlockedProfilesQuerySchema, addProfilesSchema, reasonQuerySchema, } from "../validations/index.js";
 import roleCheck from "../middlewares/role-check.js";
 const superAdminRoutes = new Hono();
@@ -31,6 +31,7 @@ superAdminRoutes
     .put("/user/password/:_id", zv("param", _idParamSchema), zv("json", resetPassByAdminSchema), resetPass)
     .put("/user/:_id/plan/extend", zv("param", _idParamSchema), zv("json", extendPlanSchema), extendUserPlan)
     .put("/user/:_id/plan/profiles", zv("param", _idParamSchema), zv("json", addProfilesSchema), addUserProfiles)
+    .put("/payment/:_id/extend", zv("param", _idParamSchema), zv("json", extendPlanSchema), extendPaymentById)
     .put("/user/invite/:_id", zv("param", _idParamSchema), updateInvited)
     .put("/user/critical/:_id", zv("param", _idParamSchema), zv("json", updateUserCriticalSchema), updateUserCritical)
     .put("/users/bulk", zv("json", bulkUpdateUsersSchema), bulkUpdateUsers);

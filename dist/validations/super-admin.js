@@ -70,9 +70,10 @@ export const mkePaymentSchema = z.object({
 });
 const reasonSchema = z.string().trim().max(300, "Reason must be at most 300 characters").optional();
 export const extendPlanSchema = z.object({
-    days: z.number("Days is required").int("Days must be a whole number").min(1, "Days must be at least 1").max(365, "Days must be at most 365"),
+    days: z.number().int("Days must be a whole number").min(1, "Days must be at least 1").max(365, "Days must be at most 365").optional(),
+    months: z.number().int("Months must be a whole number").min(1, "Months must be at least 1").max(24, "Months must be at most 24").optional(),
     reason: reasonSchema,
-});
+}).refine(data => (data.days === undefined) !== (data.months === undefined), { message: "Provide either days or months" });
 export const addProfilesSchema = z.object({
     count: z.number("Count is required").int("Count must be a whole number").min(1, "Count must be at least 1").max(500, "Count must be at most 500"),
     reason: reasonSchema,
