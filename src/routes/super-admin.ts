@@ -8,7 +8,7 @@ import {
   makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
   updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles,
   extendUserPlan, getPaymentUsers, getUserPayments, deleteUserPayment,
-  addUserProfiles, getUserPaymentLogs,
+  addUserProfiles, getUserPaymentLogs, getUserHistory,
 } from "../controllers/super-admin.js";
 
 import {
@@ -43,6 +43,7 @@ superAdminRoutes
   .get("/user/:_id/payments", zv("param", _idParamSchema), getUserPayments)
   .get("/user/:_id/unlocked", zv("param", _idParamSchema), zv("query", unlockedProfilesQuerySchema), getUserUnlockedProfiles)
   .get("/user/:_id/payment-logs", zv("param", _idParamSchema), getUserPaymentLogs)
+  .get("/user/:_id/history", zv("param", _idParamSchema), getUserHistory)
   .delete("/user/:_id/plan", zv("param", _idParamSchema), zv("query", reasonQuerySchema), removeUserPlan)
   .delete("/payment/:_id", zv("param", _idParamSchema), zv("query", reasonQuerySchema), deleteUserPayment)
   .get("/admins", getAdmins)

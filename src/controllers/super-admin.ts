@@ -12,12 +12,13 @@ import type { zContext } from "../types/index.js";
 
 import { redisClient } from "../services/connect-redis.js";
 
-import { Payment, User, Admin, UserAccess, PaymentLog } from "../models/index.js";
+import { Payment, User, Admin, UserAccess, PaymentLog, UserLog } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
 import { onPaid, syncUnlockExpiry } from "./payment.js";
 import { getPlanPricing, UNLIMITED_PROFILES } from "../utils/plan-pricing.js";
+import { getFieldChanges, logUserChanges } from "../utils/user-changes.js";
 
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt"
 const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
@@ -558,6 +559,31 @@ export async function addUserProfiles(c: zContext<{ param: typeof _idParamSchema
   return c.json({ noOfProfilesCanView: payment.noOfProfilesCanView })
 }
 
+export async function getUserHistory(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+  if (!isValidObjectId(_id)) return c.json([])
+
+  const [logs, user] = await Promise.all([
+    UserLog.find({ user: _id })
+      .populate("admin", "fullName")
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean(),
+    User.findById(_id).select("createdAt createdBy").populate("createdBy", "fullName").lean(),
+  ])
+
+  const hasCreatedLog = logs.some(log => log.action === "created")
+  if (!user || hasCreatedLog) return c.json(logs)
+
+  return c.json([...logs, {
+    _id: `created-${_id}`,
+    action: "created",
+    admin: user.createdBy ?? null,
+    changes: [],
+    createdAt: user.createdAt,
+  }])
+}
+
 export async function getUserPaymentLogs(c: zContext<{ param: typeof _idParamSchema }>) {
   const { _id } = c.req.valid("param")
   if (!isValidObjectId(_id)) return c.json([])
@@ -734,7 +760,8 @@ export async function deleteUserPayment(c: zContext<{ param: typeof _idParamSche
 export async function updateInvited(c: zContext<{ param: typeof _idParamSchema }>) {
   const { _id } = c.req.valid("param")
 
-  await User.updateOne({ _id }, { invited: true })
+  const result = await User.updateOne({ _id }, { invited: true })
+  if (result.matchedCount) await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "invited" }])
 
   return c.json({ message: t(c, "userInvited") })
 }
@@ -796,7 +823,8 @@ export async function resetPass(c: zContext<{ param: typeof _idParamSchema, json
   const { _id } = c.req.valid("param")
 
   const hashedPass = await hashPassword(password)
-  await User.updateOne({ _id }, { password: hashedPass })
+  const result = await User.updateOne({ _id }, { password: hashedPass })
+  if (result.matchedCount) await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "passwordReset" }])
 
   return c.json({ message: t(c, "adminPasswordReset") })
 }
@@ -896,7 +924,7 @@ export async function updateUserCritical(c: zContext<{ param: typeof _idParamSch
   const { _id } = c.req.valid("param")
   const { email, mobile, salary } = c.req.valid("json")
 
-  const user = await User.findById(_id).select("_id")
+  const user = await User.findById(_id).select("_id email contactDetails.mobile proffessionalDetails.salary").lean()
   if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
 
   const update: Record<string, any> = {}
@@ -905,6 +933,7 @@ export async function updateUserCritical(c: zContext<{ param: typeof _idParamSch
   if (salary !== undefined) update["proffessionalDetails.salary"] = salary
 
   await User.updateOne({ _id }, { $set: update })
+  await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "updated", changes: getFieldChanges(user, update) }])
 
   return c.json({ message: t(c, "userDetailsUpdated") })
 }
@@ -919,6 +948,17 @@ export async function bulkUpdateUsers(c: zContext<{ json: typeof bulkUpdateUsers
     }
   })) as any[]
 
+  const before = await User.find({ _id: { $in: updates.map(update => update._id) } }).select("-password -refreshTokens").lean()
+
   await User.bulkWrite(bulkOps)
+
+  const admin = c.get("user")
+  await logUserChanges(updates.map(({ _id, ...rest }) => ({
+    user: _id,
+    admin: admin._id,
+    action: "updated" as const,
+    changes: getFieldChanges(before.find(doc => String(doc._id) === String(_id)), rest),
+  })))
+
   return c.json({ message: tf(c, "bulkUsersUpdated", { count: updates.length }) })
 }
