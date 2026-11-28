@@ -4,6 +4,7 @@ import { hashPassword, getFilterObj, t } from "../utils/index.js";
 import { redisClient } from "../services/connect-redis.js";
 import { claimUserImages } from "../services/cloudinary.js";
 import { User } from "../models/index.js";
+import { getFieldChanges, logUserChanges } from "../utils/user-changes.js";
 const userSelect = "_id fullName email contactDetails.mobile profileImg dob gender maritalStatus otherDetails.caste otherDetails.subCaste proffessionalDetails.salary";
 function userSelectMap(prefix = "") {
     return userSelect.split(" ").reduce((prev, curr) => {
@@ -159,6 +160,7 @@ export async function createUsers(c) {
                 createdBy: _id,
             });
             const savedUser = await newUser.save();
+            await logUserChanges([{ user: savedUser._id, admin: _id, action: "created" }]);
             results.push({
                 _id: savedUser._id,
                 email: savedUser.email || undefined,
@@ -179,6 +181,9 @@ export async function createUsers(c) {
 }
 export async function userMarriedTo(c) {
     const { _id, marriedTo, marriedOn } = c.req.valid("json");
+    const admin = c.get("user");
+    const ids = marriedTo ? [_id, marriedTo] : [_id];
+    const before = await User.find({ _id: { $in: ids } }).select("isMarried marriedTo marriedOn").lean();
     const payload = [{
             updateOne: {
                 filter: { _id },
@@ -201,6 +206,12 @@ export async function userMarriedTo(c) {
         }
     }
     await User.bulkWrite(payload);
+    await logUserChanges(payload.map((op) => ({
+        user: op.updateOne.filter._id,
+        admin: admin._id,
+        action: "married",
+        changes: getFieldChanges(before.find(doc => String(doc._id) === String(op.updateOne.filter._id)), op.updateOne.update.$set),
+    })));
     return c.json({ message: t(c, "marriedToUpdated") });
 }
 export async function updateUser(c) {
@@ -208,10 +219,13 @@ export async function updateUser(c) {
     if (Object.keys(rest).length === 0) {
         return c.json({ message: t(c, "noParamsToUpdate") }, 400);
     }
+    const before = await User.findById(_id).select("-password -refreshTokens").lean();
     const user = await User.findOneAndUpdate({ _id }, rest, { new: true })
         .select("role")
         .lean();
-    if (user)
+    if (user) {
         await redisClient.del(`${user.role}:${_id}`);
+        await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "updated", changes: getFieldChanges(before, rest) }]);
+    }
     return c.json({ message: t(c, "userDetailsUpdated") });
 }

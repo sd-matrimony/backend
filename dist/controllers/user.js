@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import { getImgUrl, deleteImageByUrl } from '../services/index.js';
-import { UserAccess, User } from '../models/index.js';
+import { UserAccess, User, Payment } from '../models/index.js';
 import { getFilterObj, t } from '../utils/index.js';
 import { MAX_GALLERY_IMAGES } from '../utils/enums.js';
 const userSelectFields = "_id fullName profileImg maritalStatus gender dob proffessionalDetails.highestQualification proffessionalDetails.profession otherDetails.caste otherDetails.subCaste currentPlan isVerified";
@@ -22,7 +22,6 @@ async function checkUserAccess(user, _id) {
     const hasUnlockedAccess = await UserAccess.findOne({
         viewer: user._id,
         viewed: _id,
-        payment: user.currentPlan._id,
     }).select("_id").lean();
     return !!hasUnlockedAccess;
 }
@@ -61,6 +60,14 @@ export const getCurrentPlan = async (c) => {
         unlockedCount,
     };
     return c.json(payload);
+};
+export const getMyPayments = async (c) => {
+    const { _id } = c.get("user");
+    const payments = await Payment.find({ user: _id })
+        .select("_id amount subscribedTo noOfProfilesCanView isAssisted assistedMonths expiryDate createdAt orderId")
+        .sort({ createdAt: -1, _id: -1 })
+        .lean();
+    return c.json(payments);
 };
 export const getPartnerPreferences = async (c) => {
     const { _id } = c.get("user");
@@ -160,7 +167,7 @@ export const getUnlockedProfiles = async (c) => {
     const { _id, currentPlan } = c.get("user");
     if (!currentPlan)
         return c.json([]);
-    const list = await UserAccess.find({ viewer: _id, payment: currentPlan._id })
+    const list = await UserAccess.find({ viewer: _id })
         .select("viewed")
         .populate({
         path: "viewed",
@@ -172,8 +179,18 @@ export const getUnlockedProfiles = async (c) => {
     })
         .sort({ createdAt: -1 })
         .lean();
+    const seen = new Set();
+    const profiles = list
+        .map(item => item.viewed)
+        .filter(profile => {
+        const key = String(profile?._id ?? "");
+        if (!key || seen.has(key))
+            return false;
+        seen.add(key);
+        return true;
+    });
     const me = await User.findById(_id).select("hidden").lean();
-    const payload = withHiddenFlag(list.map((item) => item.viewed), me?.hidden || []);
+    const payload = withHiddenFlag(profiles, me?.hidden || []);
     return c.json(payload);
 };
 export const addLiked = async (c) => {

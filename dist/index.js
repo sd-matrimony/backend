@@ -23,6 +23,7 @@ import userRoutes from './routes/user.js';
 import { connectMongo, connectRedis, redisClient } from './services/index.js';
 import { env } from './utils/enums.js';
 import { t, translateStatic } from './utils/i18n.js';
+import { phonepeWebhook, reconcilePendingOrders } from './controllers/payment.js';
 try {
     await Promise.all([connectMongo(), connectRedis()]);
 }
@@ -54,6 +55,7 @@ app.use("/static/*", serveStatic({
     },
 }));
 app.route("/account", accountRoutes);
+app.post("/payment/webhook", phonepeWebhook);
 app.use(createRateLimiter());
 app.get("/health", c => {
     const { version } = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../package.json"), "utf-8"));
@@ -81,6 +83,10 @@ app.onError((err, c) => {
     const message = err?.message ? translateStatic(c, err.message) : t(c, 'internalServerError');
     return c.json({ message }, 500);
 });
+const RECONCILE_INTERVAL = 10 * 60 * 1000;
+setInterval(() => {
+    reconcilePendingOrders().catch(error => console.log("Order reconcile failed", error));
+}, RECONCILE_INTERVAL);
 const port = Number(process.env.PORT || 5000);
 console.log(`Server is running on http://localhost:${port}`);
 serve({

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles, } from "../controllers/super-admin.js";
-import { skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema, activeUsersSchema, paidUsersSchema, dashboardStatsSchema, } from "../validations/index.js";
+import { getUsersCount, getPaidUsers, getAssistedSubscribedUsers, getUsersAllPayments, getUsersByCreatedBy, getUsersGroupedByAdminCount, getUsersGroupedList, getUsersGroupedCount, getAdmins, createAdmin, updateAdmin, getUsersInvitations, updateInvited, resetPass, makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan, updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles, extendUserPlan, getPaymentUsers, getUserPayments, deleteUserPayment, addUserProfiles, getUserPaymentLogs, getUserHistory, } from "../controllers/super-admin.js";
+import { skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema, zv, usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema, mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema, activeUsersSchema, paidUsersSchema, dashboardStatsSchema, extendPlanSchema, paymentUsersSchema, unlockedProfilesQuerySchema, addProfilesSchema, reasonQuerySchema, } from "../validations/index.js";
 import roleCheck from "../middlewares/role-check.js";
 const superAdminRoutes = new Hono();
 superAdminRoutes.use(roleCheck(["super-admin"]));
@@ -17,13 +17,20 @@ superAdminRoutes
     .get("/users/grouped/list", zv("query", usersGroupedListSchema), getUsersGroupedList)
     .get("/users/invitations", zv("query", findUsersSchema), getUsersInvitations)
     .get("/user/:_id/plan", zv("param", _idParamSchema), getUserCurrentPlan)
-    .get("/user/:_id/unlocked", zv("param", _idParamSchema), getUserUnlockedProfiles)
-    .delete("/user/:_id/plan", zv("param", _idParamSchema), removeUserPlan)
+    .get("/payments/users", zv("query", paymentUsersSchema), getPaymentUsers)
+    .get("/user/:_id/payments", zv("param", _idParamSchema), getUserPayments)
+    .get("/user/:_id/unlocked", zv("param", _idParamSchema), zv("query", unlockedProfilesQuerySchema), getUserUnlockedProfiles)
+    .get("/user/:_id/payment-logs", zv("param", _idParamSchema), getUserPaymentLogs)
+    .get("/user/:_id/history", zv("param", _idParamSchema), getUserHistory)
+    .delete("/user/:_id/plan", zv("param", _idParamSchema), zv("query", reasonQuerySchema), removeUserPlan)
+    .delete("/payment/:_id", zv("param", _idParamSchema), zv("query", reasonQuerySchema), deleteUserPayment)
     .get("/admins", getAdmins)
     .post("/admin", zv("json", adminCreateSchema), createAdmin)
     .post("/user/payment", zv("json", mkePaymentSchema), makePaymentForUser)
     .put("/admin/:_id", zv("param", _idParamSchema), zv("json", adminUpdateSchema), updateAdmin)
     .put("/user/password/:_id", zv("param", _idParamSchema), zv("json", resetPassByAdminSchema), resetPass)
+    .put("/user/:_id/plan/extend", zv("param", _idParamSchema), zv("json", extendPlanSchema), extendUserPlan)
+    .put("/user/:_id/plan/profiles", zv("param", _idParamSchema), zv("json", addProfilesSchema), addUserProfiles)
     .put("/user/invite/:_id", zv("param", _idParamSchema), updateInvited)
     .put("/user/critical/:_id", zv("param", _idParamSchema), zv("json", updateUserCriticalSchema), updateUserCritical)
     .put("/users/bulk", zv("json", bulkUpdateUsersSchema), bulkUpdateUsers);

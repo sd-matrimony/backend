@@ -16,6 +16,8 @@ export const env = {
     RAZORPAY_SECRET: process.env.RAZORPAY_SECRET || "",
     PHONE_PAY_CLIENT_ID: process.env.PHONE_PAY_CLIENT_ID || "",
     PHONE_PAY_SECRET: process.env.PHONE_PAY_SECRET || "",
+    PHONE_PAY_WEBHOOK_USERNAME: process.env.PHONE_PAY_WEBHOOK_USERNAME || "",
+    PHONE_PAY_WEBHOOK_PASSWORD: process.env.PHONE_PAY_WEBHOOK_PASSWORD || "",
 };
 export const tokenEnums = {
     verifyToken: "verifyToken",
@@ -40,15 +42,15 @@ export const planValidityMonths = {
     platinum: 12,
 };
 export const planPrices = {
-    basic: 1_500,
-    gold: 3_200,
-    diamond: 5_500,
-    platinum: 7_000,
+    basic: 1_999,
+    gold: 3_999,
+    diamond: 5_999,
+    platinum: 7_999,
 };
 export const profilesCount = {
-    basic: 20,
-    gold: 45,
-    diamond: 70,
+    basic: 25,
+    gold: 50,
+    diamond: 75,
     platinum: 100,
 };
 export const extraProfiles = {

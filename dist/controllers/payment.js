@@ -1,9 +1,10 @@
 import axios from 'axios';
-import { z } from "zod";
-import { assistedPrices, env, extraProfiles, phonepayEndpoints, planPrices, planValidityMonths, profilesCount } from '../utils/enums.js';
-import { Payment, User } from '../models/index.js';
+import { env, phonepayEndpoints, planValidityMonths } from '../utils/enums.js';
+import { Order, Payment, User, UserAccess } from '../models/index.js';
+import { addMonths } from '../utils/date.js';
+import { getPlanPricing } from '../utils/plan-pricing.js';
 import { redisClient } from '../services/connect-redis.js';
-import { tf } from '../utils/i18n.js';
+import { t, tf } from '../utils/i18n.js';
 let cachedToken = "";
 let tokenExpiry = Date.now();
 async function getToken() {
@@ -24,38 +25,119 @@ async function getToken() {
     tokenExpiry = data.expires_at * 1000;
     return cachedToken;
 }
-export const createOrder = async (c) => {
-    const { _id } = c.get("user");
-    const { subscribedTo = "basic", noOfProfilesCanView = 30, isAssisted = false, assistedMonths = 0 } = c.req.valid("json");
-    let amount = planPrices[subscribedTo];
-    const notes = {
-        user_id: _id,
-        subscribedTo,
-        noOfProfilesCanView,
-        isAssisted,
+async function getPhonepeOrderStatus(merchantOrderId) {
+    const authToken = await getToken();
+    const { data } = await axios.get(phonepayEndpoints.orderStatus(merchantOrderId), {
+        headers: { "Authorization": `O-Bearer ${authToken}` }
+    });
+    return data;
+}
+export async function syncUnlockExpiry(userId, expiryDate) {
+    await UserAccess.updateMany({ viewer: userId, expiresAt: { $lt: expiryDate } }, { expiresAt: expiryDate });
+}
+async function getPlanStartDate(userId) {
+    const user = await User.findById(userId)
+        .select("currentPlan")
+        .populate("currentPlan", "expiryDate")
+        .lean();
+    const now = new Date();
+    const currentExpiry = user?.currentPlan?.expiryDate;
+    return currentExpiry && currentExpiry > now ? new Date(currentExpiry) : now;
+}
+export async function onPaid({ _id, role }, body) {
+    const assistedMonths = body.isAssisted ? body.assistedMonths : 0;
+    const startDate = await getPlanStartDate(_id);
+    const expiryDate = addMonths(startDate, planValidityMonths[body.subscribedTo]);
+    const payment = await Payment.create({
+        ...body,
         assistedMonths,
-    };
-    if (noOfProfilesCanView === 999) {
-        // Unlimited
-        amount += extraProfiles[999];
+        user: _id,
+        expiryDate,
+    });
+    const updatedUser = await User.findOneAndUpdate({ _id }, { currentPlan: payment._id }, { new: true })
+        .select("_id role isBlocked isDeleted currentPlan")
+        .populate("currentPlan", "_id subscribedTo expiryDate noOfProfilesCanView")
+        .lean();
+    await syncUnlockExpiry(_id, expiryDate);
+    const redisKey = `${role}:${_id}`;
+    await redisClient.set(redisKey, JSON.stringify(updatedUser), {
+        expiration: {
+            type: "EX",
+            value: 60 * 60 * 24, // 1 day
+        }
+    });
+    return payment;
+}
+export async function settleOrder(order) {
+    if (order.status === "completed" && order.payment) {
+        const payment = await Payment.findById(order.payment).select("subscribedTo expiryDate").lean();
+        if (payment)
+            return { status: "completed", payment };
     }
-    else {
-        const added = noOfProfilesCanView - profilesCount[subscribedTo];
-        if (added > 0) {
-            amount += extraProfiles[added];
+    if (order.status === "failed")
+        return { status: "failed" };
+    const data = await getPhonepeOrderStatus(order.merchantOrderId);
+    if (data.state === "FAILED") {
+        await Order.updateOne({ _id: order._id, status: "pending" }, { status: "failed" });
+        return { status: "failed" };
+    }
+    if (data.state !== "COMPLETED")
+        return { status: "pending" };
+    if (data.amount !== order.amount * 100)
+        return { status: "mismatch" };
+    const claimed = await Order.findOneAndUpdate({ _id: order._id, status: "pending" }, { status: "completed" }, { new: true });
+    if (!claimed) {
+        const latest = await Order.findById(order._id);
+        return latest && latest.status === "completed" ? settleOrder(latest) : { status: "pending" };
+    }
+    try {
+        const payment = await onPaid({ _id: String(order.user), role: "user" }, {
+            amount: order.amount,
+            subscribedTo: order.subscribedTo,
+            noOfProfilesCanView: order.noOfProfilesCanView,
+            isAssisted: order.isAssisted ?? false,
+            assistedMonths: order.assistedMonths ?? 0,
+            orderId: order.phonepeOrderId || order.merchantOrderId,
+        });
+        await Order.updateOne({ _id: order._id }, { payment: payment._id });
+        return { status: "completed", payment };
+    }
+    catch (error) {
+        await Order.updateOne({ _id: order._id }, { status: "pending" });
+        throw error;
+    }
+}
+const RECONCILE_MIN_AGE = 2 * 60 * 1000;
+const RECONCILE_MAX_AGE = 2 * 24 * 60 * 60 * 1000;
+export async function reconcilePendingOrders() {
+    const now = Date.now();
+    const orders = await Order.find({
+        status: "pending",
+        createdAt: { $lte: new Date(now - RECONCILE_MIN_AGE), $gte: new Date(now - RECONCILE_MAX_AGE) },
+    });
+    for (const order of orders) {
+        try {
+            await settleOrder(order);
+        }
+        catch (error) {
+            console.log(`Failed to reconcile order ${order.merchantOrderId}`, error instanceof Error ? error.message : error);
         }
     }
-    if (isAssisted) {
-        amount += assistedPrices[assistedMonths];
-    }
-    const authToken = await getToken();
+}
+export const createOrder = async (c) => {
+    const { _id } = c.get("user");
+    const { subscribedTo, noOfProfilesCanView, isAssisted, assistedMonths } = c.req.valid("json");
+    const pricing = getPlanPricing({ subscribedTo, noOfProfilesCanView, isAssisted, assistedMonths });
+    if (!pricing.ok)
+        return c.json({ message: t(c, pricing.error) }, 400);
+    const { amount } = pricing;
     const merchantOrderId = `Tx-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const orderBody = {
         "merchantOrderId": merchantOrderId,
         "amount": amount * 100,
         "expireAfter": 3600,
         "metaInfo": {
-            "udf1": JSON.stringify(notes),
+            "udf1": JSON.stringify({ user_id: _id, subscribedTo, noOfProfilesCanView, isAssisted, assistedMonths: pricing.assistedMonths }),
         },
         "paymentFlow": {
             "type": "PG_CHECKOUT",
@@ -65,50 +147,78 @@ export const createOrder = async (c) => {
             }
         }
     };
-    const { data } = await axios.post(phonepayEndpoints.createOrder, orderBody, {
-        headers: { "Authorization": `O-Bearer ${authToken}` }
+    let data;
+    try {
+        const authToken = await getToken();
+        const response = await axios.post(phonepayEndpoints.createOrder, orderBody, {
+            headers: { "Authorization": `O-Bearer ${authToken}` }
+        });
+        data = response.data;
+    }
+    catch (error) {
+        if (!axios.isAxiosError(error))
+            throw error;
+        console.log("PhonePe create order failed", error.response?.status);
+        return c.json({ message: t(c, "paymentServiceBusy") }, 503);
+    }
+    await Order.create({
+        user: _id,
+        merchantOrderId,
+        phonepeOrderId: data?.orderId,
+        amount,
+        subscribedTo,
+        noOfProfilesCanView,
+        isAssisted,
+        assistedMonths: pricing.assistedMonths,
     });
     return c.json({ ...data, amount, merchantOrderId });
 };
-export async function onPaid({ _id, role }, body) {
-    if (!body.isAssisted) {
-        body.assistedMonths = 0;
-    }
-    const expiryDate = new Date(new Date().setMonth(new Date().getMonth() + planValidityMonths[body.subscribedTo]));
-    const payment = await Payment.create({
-        ...body,
-        user: _id,
-        expiryDate,
-    });
-    const updatedUser = await User.findOneAndUpdate({ _id }, { currentPlan: payment._id }, { new: true })
-        .select("_id role isBlocked isDeleted currentPlan")
-        .populate("currentPlan", "_id subscribedTo expiryDate noOfProfilesCanView")
-        .lean();
-    const redisKey = `${role}:${_id}`;
-    await redisClient.set(redisKey, JSON.stringify(updatedUser), {
-        expiration: {
-            type: "EX",
-            value: 60 * 60 * 24, // 1 day
-        }
-    });
-    return {
-        subscribedTo: payment.subscribedTo,
-        expiryDate: payment.expiryDate
-    };
-}
 export const verifyPayment = async (c) => {
-    const { merchantOrderId, ...body } = c.req.valid("json");
-    const { _id, role } = c.get("user");
-    const authToken = await getToken();
-    const url = phonepayEndpoints.orderStatus(merchantOrderId);
-    const { data } = await axios.get(url, {
-        headers: { "Authorization": `O-Bearer ${authToken}` }
-    });
-    if (data.state !== "COMPLETED") {
-        return c.json({ message: data?.errorContext?.description || data?.message }, 400);
+    const { merchantOrderId } = c.req.valid("json");
+    const { _id } = c.get("user");
+    const order = await Order.findOne({ merchantOrderId, user: _id });
+    if (!order)
+        return c.json({ message: t(c, "orderNotFound") }, 404);
+    let result;
+    try {
+        result = await settleOrder(order);
     }
-    const res = await onPaid({ _id, role }, body);
-    return c.json(res);
+    catch (error) {
+        if (!axios.isAxiosError(error))
+            throw error;
+        console.log("PhonePe status check failed", error.response?.status);
+        return c.json({ message: t(c, "paymentCheckFailed") }, 503);
+    }
+    if (result.status !== "completed") {
+        const errorKeys = { pending: "paymentPending", failed: "paymentFailed", mismatch: "paymentAmountMismatch" };
+        return c.json({ message: t(c, errorKeys[result.status]) }, 400);
+    }
+    return c.json({
+        subscribedTo: result.payment.subscribedTo,
+        expiryDate: result.payment.expiryDate,
+    });
+};
+async function sha256(value) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+export const phonepeWebhook = async (c) => {
+    const { PHONE_PAY_WEBHOOK_USERNAME: username, PHONE_PAY_WEBHOOK_PASSWORD: password } = env;
+    if (!username || !password)
+        return c.json({ message: t(c, "invalidWebhook") }, 401);
+    const expected = await sha256(`${username}:${password}`);
+    const received = (c.req.header("Authorization") || "").replace(/^SHA256\s+/i, "").trim().toLowerCase();
+    if (received !== expected)
+        return c.json({ message: t(c, "invalidWebhook") }, 401);
+    const body = await c.req.json().catch(() => null);
+    const merchantOrderId = body?.payload?.merchantOrderId;
+    if (!merchantOrderId)
+        return c.json({ message: t(c, "invalidWebhook") }, 400);
+    const order = await Order.findOne({ merchantOrderId });
+    if (!order)
+        return c.json({ message: t(c, "orderNotFound") }, 404);
+    const result = await settleOrder(order);
+    return c.json({ status: result.status });
 };
 export const testCreateOrder = async (c) => {
     const { _id } = c.get("user");
@@ -141,11 +251,7 @@ export const testCreateOrder = async (c) => {
 };
 export const testVerifyPayment = async (c) => {
     const { merchantOrderId, orderId } = c.req.valid("json");
-    const authToken = await getToken();
-    const url = phonepayEndpoints.orderStatus(merchantOrderId);
-    const { data } = await axios.get(url, {
-        headers: { "Authorization": `O-Bearer ${authToken}` }
-    });
+    const data = await getPhonepeOrderStatus(merchantOrderId);
     if (data.state !== "COMPLETED") {
         return c.json({ message: data?.errorContext?.description || data?.message }, 400);
     }

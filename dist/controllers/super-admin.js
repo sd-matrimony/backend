@@ -1,8 +1,12 @@
-import { Payment, User, Admin, UserAccess } from "../models/index.js";
+import { Types, isValidObjectId } from "mongoose";
+import { redisClient } from "../services/connect-redis.js";
+import { Payment, User, Admin, UserAccess, PaymentLog, UserLog } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
-import { onPaid } from "./payment.js";
+import { onPaid, syncUnlockExpiry } from "./payment.js";
+import { getPlanPricing, UNLIMITED_PROFILES } from "../utils/plan-pricing.js";
+import { getFieldChanges, logUserChanges } from "../utils/user-changes.js";
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt";
 const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary";
 export async function getUsersCount(c) {
@@ -396,12 +400,265 @@ export async function getUsersInvitations(c) {
 }
 export async function removeUserPlan(c) {
     const { _id } = c.req.valid("param");
+    const { reason } = c.req.valid("query") || {};
+    const admin = c.get("user");
+    const user = await User.findById(_id).select("currentPlan").lean();
+    if (!user)
+        return c.json({ message: t(c, "userNotFound") }, 404);
     await User.updateOne({ _id }, { $unset: { currentPlan: 1 } });
+    await redisClient.del(`user:${_id}`);
+    if (user.currentPlan) {
+        const payment = await Payment.findById(user.currentPlan).select("subscribedTo amount expiryDate").lean();
+        await PaymentLog.create({
+            user: _id,
+            payment: user.currentPlan,
+            admin: admin._id,
+            action: "cancelled",
+            details: { subscribedTo: payment?.subscribedTo, amount: payment?.amount, previousExpiry: payment?.expiryDate },
+            reason,
+        });
+    }
     return c.json({ message: t(c, "subscriptionRemoved") });
+}
+export async function extendUserPlan(c) {
+    const { _id } = c.req.valid("param");
+    const { days, reason } = c.req.valid("json");
+    const admin = c.get("user");
+    const user = await User.findById(_id).select("currentPlan").lean();
+    if (!user)
+        return c.json({ message: t(c, "userNotFound") }, 404);
+    if (!user.currentPlan)
+        return c.json({ message: t(c, "noActivePlan") }, 400);
+    const payment = await Payment.findById(user.currentPlan).select("expiryDate");
+    if (!payment)
+        return c.json({ message: t(c, "noActivePlan") }, 400);
+    const now = new Date();
+    const previousExpiry = payment.expiryDate;
+    const base = previousExpiry && previousExpiry > now ? previousExpiry : now;
+    payment.expiryDate = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    await payment.save();
+    await syncUnlockExpiry(_id, payment.expiryDate);
+    await redisClient.del(`user:${_id}`);
+    await PaymentLog.create({
+        user: _id,
+        payment: payment._id,
+        admin: admin._id,
+        action: "extended",
+        details: { days, previousExpiry, newExpiry: payment.expiryDate },
+        reason,
+    });
+    return c.json({ expiryDate: payment.expiryDate });
+}
+export async function addUserProfiles(c) {
+    const { _id } = c.req.valid("param");
+    const { count, reason } = c.req.valid("json");
+    const admin = c.get("user");
+    const user = await User.findById(_id).select("currentPlan").lean();
+    if (!user)
+        return c.json({ message: t(c, "userNotFound") }, 404);
+    if (!user.currentPlan)
+        return c.json({ message: t(c, "noActivePlan") }, 400);
+    const payment = await Payment.findById(user.currentPlan).select("noOfProfilesCanView");
+    if (!payment)
+        return c.json({ message: t(c, "noActivePlan") }, 400);
+    const previousProfiles = payment.noOfProfilesCanView ?? 0;
+    if (previousProfiles >= UNLIMITED_PROFILES)
+        return c.json({ message: t(c, "alreadyUnlimited") }, 400);
+    payment.noOfProfilesCanView = Math.min(previousProfiles + count, UNLIMITED_PROFILES);
+    await payment.save();
+    await redisClient.del(`user:${_id}`);
+    await PaymentLog.create({
+        user: _id,
+        payment: payment._id,
+        admin: admin._id,
+        action: "profilesAdded",
+        details: { profiles: count, previousProfiles, newProfiles: payment.noOfProfilesCanView },
+        reason,
+    });
+    return c.json({ noOfProfilesCanView: payment.noOfProfilesCanView });
+}
+export async function getUserHistory(c) {
+    const { _id } = c.req.valid("param");
+    if (!isValidObjectId(_id))
+        return c.json([]);
+    const [logs, user] = await Promise.all([
+        UserLog.find({ user: _id })
+            .populate("admin", "fullName")
+            .sort({ createdAt: -1 })
+            .limit(200)
+            .lean(),
+        User.findById(_id).select("createdAt createdBy").populate("createdBy", "fullName").lean(),
+    ]);
+    const hasCreatedLog = logs.some(log => log.action === "created");
+    if (!user || hasCreatedLog)
+        return c.json(logs);
+    return c.json([...logs, {
+            _id: `created-${_id}`,
+            action: "created",
+            admin: user.createdBy ?? null,
+            changes: [],
+            createdAt: user.createdAt,
+        }]);
+}
+export async function getUserPaymentLogs(c) {
+    const { _id } = c.req.valid("param");
+    if (!isValidObjectId(_id))
+        return c.json([]);
+    const [logs, payments] = await Promise.all([
+        PaymentLog.find({ user: _id })
+            .populate("admin", "fullName")
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean(),
+        Payment.find({ user: _id })
+            .select("_id amount subscribedTo expiryDate noOfProfilesCanView orderId createdAt")
+            .lean(),
+    ]);
+    const loggedPayments = new Set(logs.filter(log => log.action === "created").map(log => String(log.payment)));
+    const paymentEntries = payments
+        .filter(payment => !loggedPayments.has(String(payment._id)))
+        .map(payment => ({
+        _id: `payment-${payment._id}`,
+        payment: payment._id,
+        action: payment.orderId?.startsWith("by-admin") ? "created" : "purchased",
+        admin: null,
+        createdAt: payment.createdAt,
+        details: {
+            subscribedTo: payment.subscribedTo,
+            amount: payment.amount,
+            newExpiry: payment.expiryDate,
+            newProfiles: payment.noOfProfilesCanView,
+        },
+    }));
+    const activity = [...logs, ...paymentEntries]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json(activity);
+}
+function escapeRegex(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+export async function getPaymentUsers(c) {
+    const { skip, limit, search, status } = c.req.valid("query");
+    const now = new Date();
+    const match = {};
+    if (search) {
+        const regex = new RegExp(escapeRegex(search), "i");
+        match.$or = [
+            { "user.fullName": regex },
+            { "user.email": regex },
+            { "user.contactDetails.mobile": regex },
+        ];
+    }
+    if (status === "active")
+        match["currentPlan.expiryDate"] = { $gt: now };
+    if (status === "expired")
+        match.$nor = [{ "currentPlan.expiryDate": { $gt: now } }];
+    const users = await Payment.aggregate([
+        {
+            $group: {
+                _id: "$user",
+                paymentsCount: { $sum: 1 },
+                totalAmount: { $sum: "$amount" },
+                lastPaidAt: { $max: "$createdAt" },
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "_id",
+                foreignField: "_id",
+                as: "user",
+                pipeline: [{ $project: { fullName: 1, email: 1, profileImg: 1, "contactDetails.mobile": 1, currentPlan: 1 } }],
+            },
+        },
+        { $unwind: "$user" },
+        {
+            $lookup: {
+                from: "payments",
+                localField: "user.currentPlan",
+                foreignField: "_id",
+                as: "currentPlan",
+                pipeline: [{ $project: { subscribedTo: 1, expiryDate: 1, noOfProfilesCanView: 1 } }],
+            },
+        },
+        { $unwind: { path: "$currentPlan", preserveNullAndEmptyArrays: true } },
+        { $match: match },
+        { $sort: { lastPaidAt: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: { "user.currentPlan": 0 } },
+    ]);
+    return c.json(users);
+}
+export async function getUserPayments(c) {
+    const { _id } = c.req.valid("param");
+    if (!isValidObjectId(_id))
+        return c.json({ message: t(c, "userNotFound") }, 404);
+    const user = await User.findById(_id)
+        .select("_id fullName email profileImg contactDetails.mobile currentPlan")
+        .lean();
+    if (!user)
+        return c.json({ message: t(c, "userNotFound") }, 404);
+    const [payments, unlockCounts] = await Promise.all([
+        Payment.find({ user: _id })
+            .select(`${planSelectFields} orderId`)
+            .sort({ createdAt: -1, _id: -1 })
+            .lean(),
+        UserAccess.aggregate([
+            { $match: { viewer: new Types.ObjectId(_id) } },
+            { $group: { _id: "$payment", count: { $sum: 1 } } },
+        ]),
+    ]);
+    const countByPayment = new Map(unlockCounts.map(item => [String(item._id), item.count]));
+    const currentPlanId = user.currentPlan ? String(user.currentPlan) : null;
+    return c.json({
+        user,
+        payments: payments.map(payment => ({
+            ...payment,
+            isCurrent: String(payment._id) === currentPlanId,
+            unlockedCount: countByPayment.get(String(payment._id)) ?? 0,
+        })),
+    });
+}
+export async function deleteUserPayment(c) {
+    const { _id } = c.req.valid("param");
+    const { reason } = c.req.valid("query") || {};
+    const admin = c.get("user");
+    if (!isValidObjectId(_id))
+        return c.json({ message: t(c, "paymentNotFound") }, 404);
+    const payment = await Payment.findById(_id).select("_id user subscribedTo amount expiryDate").lean();
+    if (!payment)
+        return c.json({ message: t(c, "paymentNotFound") }, 404);
+    await Promise.all([
+        UserAccess.deleteMany({ payment: _id }),
+        Payment.deleteOne({ _id }),
+    ]);
+    const user = await User.findById(payment.user).select("currentPlan").lean();
+    if (user && String(user.currentPlan) === String(_id)) {
+        const fallback = await Payment.findOne({ user: payment.user, expiryDate: { $gt: new Date() } })
+            .select("_id")
+            .sort({ expiryDate: -1 })
+            .lean();
+        await User.updateOne({ _id: payment.user }, fallback ? { $set: { currentPlan: fallback._id } } : { $unset: { currentPlan: 1 } });
+    }
+    if (payment.user) {
+        await redisClient.del(`user:${payment.user}`);
+        await PaymentLog.create({
+            user: payment.user,
+            payment: payment._id,
+            admin: admin._id,
+            action: "deleted",
+            details: { subscribedTo: payment.subscribedTo, amount: payment.amount, previousExpiry: payment.expiryDate },
+            reason,
+        });
+    }
+    return c.json({ message: t(c, "paymentDeleted") });
 }
 export async function updateInvited(c) {
     const { _id } = c.req.valid("param");
-    await User.updateOne({ _id }, { invited: true });
+    const result = await User.updateOne({ _id }, { invited: true });
+    if (result.matchedCount)
+        await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "invited" }]);
     return c.json({ message: t(c, "userInvited") });
 }
 export async function createAdmin(c) {
@@ -449,7 +706,9 @@ export async function resetPass(c) {
     const { password } = c.req.valid("json");
     const { _id } = c.req.valid("param");
     const hashedPass = await hashPassword(password);
-    await User.updateOne({ _id }, { password: hashedPass });
+    const result = await User.updateOne({ _id }, { password: hashedPass });
+    if (result.matchedCount)
+        await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "passwordReset" }]);
     return c.json({ message: t(c, "adminPasswordReset") });
 }
 export async function getUserCurrentPlan(c) {
@@ -464,13 +723,34 @@ export async function getUserCurrentPlan(c) {
 }
 export async function getUserUnlockedProfiles(c) {
     const { _id } = c.req.valid("param");
+    const { payment } = c.req.valid("query") || {};
     const user = await User.findById(_id)
         .select("currentPlan")
         .populate("currentPlan", "_id subscribedTo expiryDate noOfProfilesCanView")
         .lean();
     if (!user)
         return c.json({ message: t(c, "userNotFound") }, 404);
-    const plan = user.currentPlan;
+    if (payment === "all") {
+        const list = await UserAccess.find({ viewer: _id })
+            .select("viewed payment createdAt")
+            .populate("viewed", userSelectFields)
+            .sort({ createdAt: -1 })
+            .lean();
+        const profiles = list
+            .filter(item => item.viewed)
+            .map(item => ({ ...item.viewed, unlockedAt: item.createdAt, payment: item.payment }));
+        return c.json({ plan: null, used: list.length, profiles });
+    }
+    let plan = user.currentPlan;
+    if (payment) {
+        if (!isValidObjectId(payment))
+            return c.json({ message: t(c, "paymentNotFound") }, 404);
+        plan = await Payment.findOne({ _id: payment, user: _id })
+            .select("_id subscribedTo expiryDate noOfProfilesCanView")
+            .lean();
+        if (!plan)
+            return c.json({ message: t(c, "paymentNotFound") }, 404);
+    }
     if (!plan)
         return c.json({ plan: null, used: 0, profiles: [] });
     const list = await UserAccess.find({ viewer: _id, payment: plan._id })
@@ -485,8 +765,18 @@ export async function getUserUnlockedProfiles(c) {
 }
 export async function makePaymentForUser(c) {
     const { _id, ...body } = c.req.valid("json");
-    const res = await onPaid({ _id, role: "user" }, { ...body, orderId: `by-admin-${Date.now()}` });
-    return c.json(res);
+    const pricing = getPlanPricing(body);
+    if (!pricing.ok)
+        return c.json({ message: t(c, pricing.error) }, 400);
+    const payment = await onPaid({ _id, role: "user" }, { ...body, assistedMonths: pricing.assistedMonths, orderId: `by-admin-${Date.now()}` });
+    await PaymentLog.create({
+        user: _id,
+        payment: payment._id,
+        admin: c.get("user")._id,
+        action: "created",
+        details: { subscribedTo: payment.subscribedTo, amount: payment.amount, newExpiry: payment.expiryDate, newProfiles: payment.noOfProfilesCanView },
+    });
+    return c.json({ subscribedTo: payment.subscribedTo, expiryDate: payment.expiryDate });
 }
 function flattenForSet(obj, prefix = "") {
     const result = {};
@@ -504,7 +794,7 @@ function flattenForSet(obj, prefix = "") {
 export async function updateUserCritical(c) {
     const { _id } = c.req.valid("param");
     const { email, mobile, salary } = c.req.valid("json");
-    const user = await User.findById(_id).select("_id");
+    const user = await User.findById(_id).select("_id email contactDetails.mobile proffessionalDetails.salary").lean();
     if (!user)
         return c.json({ message: t(c, "userNotFound") }, 404);
     const update = {};
@@ -515,6 +805,7 @@ export async function updateUserCritical(c) {
     if (salary !== undefined)
         update["proffessionalDetails.salary"] = salary;
     await User.updateOne({ _id }, { $set: update });
+    await logUserChanges([{ user: _id, admin: c.get("user")._id, action: "updated", changes: getFieldChanges(user, update) }]);
     return c.json({ message: t(c, "userDetailsUpdated") });
 }
 export async function bulkUpdateUsers(c) {
@@ -525,6 +816,14 @@ export async function bulkUpdateUsers(c) {
             update: { $set: flattenForSet(rest) },
         }
     }));
+    const before = await User.find({ _id: { $in: updates.map(update => update._id) } }).select("-password -refreshTokens").lean();
     await User.bulkWrite(bulkOps);
+    const admin = c.get("user");
+    await logUserChanges(updates.map(({ _id, ...rest }) => ({
+        user: _id,
+        admin: admin._id,
+        action: "updated",
+        changes: getFieldChanges(before.find(doc => String(doc._id) === String(_id)), rest),
+    })));
     return c.json({ message: tf(c, "bulkUsersUpdated", { count: updates.length }) });
 }
