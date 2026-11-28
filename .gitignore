@@ -144,3 +144,4 @@ package-lock.json
 /test/sample1.png
 
 settings.local.json
+/pnpm-workspace.yaml

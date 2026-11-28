@@ -47,7 +47,9 @@ export async function getDashboardStats(c: zContext<{ query: typeof dashboardSta
   const endOfMonth = new Date(year, mon, 1)
   const inMonth = { $and: [{ $gte: ["$createdAt", startOfMonth] }, { $lt: ["$createdAt", endOfMonth] }] }
 
-  const [revenue, totalUsers, activeToday, active7d, active30d] = await Promise.all([
+  const notDeleted = { isDeleted: { $ne: true } }
+
+  const [revenue, totalUsers, activeToday, active7d, active30d, paidUserIds, activePlanUsers] = await Promise.all([
     Payment.aggregate([
       {
         $group: {
@@ -76,13 +78,28 @@ export async function getDashboardStats(c: zContext<{ query: typeof dashboardSta
     User.countDocuments({ lastActiveAt: { $gte: daysAgo(1) } }),
     User.countDocuments({ lastActiveAt: { $gte: daysAgo(7) } }),
     User.countDocuments({ lastActiveAt: { $gte: daysAgo(30) } }),
+    Payment.distinct("user"),
+    User.aggregate<{ count: number }>([
+      { $match: { ...notDeleted, currentPlan: { $ne: null } } },
+      { $lookup: { from: "payments", localField: "currentPlan", foreignField: "_id", as: "plan", pipeline: [{ $project: { expiryDate: 1 } }] } },
+      { $match: { "plan.expiryDate": { $gt: now } } },
+      { $count: "count" },
+    ]),
   ])
+
+  const everPaid = await User.countDocuments({ ...notDeleted, _id: { $in: paidUserIds } })
+  const activePlans = activePlanUsers[0]?.count ?? 0
 
   const { total = 0, count = 0, online = 0, byAdmin = 0, month: monthTotal = 0, monthCount = 0, today = 0 } = revenue[0] || {}
 
   return c.json({
     revenue: { total, count, online, byAdmin, month: monthTotal, monthCount, today },
     users: { total: totalUsers, activeToday, active7d, active30d },
+    plans: {
+      active: activePlans,
+      expired: Math.max(everPaid - activePlans, 0),
+      unpaid: Math.max(totalUsers - everPaid, 0),
+    },
   })
 }
 
