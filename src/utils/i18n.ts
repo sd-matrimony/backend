@@ -72,6 +72,15 @@ const en = {
   cannotHideSelf: "You cannot hide your own profile",
   bulkUsersUpdated: "{count} user(s) updated successfully",
   orderCompleted: "Order with id {orderId} completed successfully",
+  invalidProfileOption: "Invalid number of profiles for this plan",
+  invalidAssistedMonths: "Assisted months must be between 1 and the plan validity",
+  orderNotFound: "Order not found",
+  paymentPending: "Payment is still processing. Your plan will be activated automatically once it completes.",
+  paymentFailed: "Payment was not completed",
+  paymentAmountMismatch: "Paid amount does not match the order",
+  alreadyUnlimited: "This plan already has unlimited profiles",
+  profilesAdded: "Profiles added successfully",
+  invalidWebhook: "Invalid webhook request",
   internalServerError: "Internal server error",
 } as const;
 
@@ -141,6 +150,15 @@ const ta: Record<MessageKey, string> = {
   cannotHideSelf: "உங்கள் சொந்த சுயவிவரத்தை மறைக்க முடியாது",
   bulkUsersUpdated: "{count} பயனர்(கள்) புதுப்பிக்கப்பட்டனர்",
   orderCompleted: "ஆர்டர் ஐடி {orderId} வெற்றிகரமாக முடிந்தது",
+  invalidProfileOption: "இந்த திட்டத்திற்கு தவறான சுயவிவர எண்ணிக்கை",
+  invalidAssistedMonths: "உதவி சேவை மாதங்கள் 1 முதல் திட்ட காலம் வரை இருக்க வேண்டும்",
+  orderNotFound: "ஆர்டர் கிடைக்கவில்லை",
+  paymentPending: "கட்டணம் இன்னும் செயலாக்கத்தில் உள்ளது. முடிந்ததும் உங்கள் திட்டம் தானாக செயல்படுத்தப்படும்.",
+  paymentFailed: "கட்டணம் முடிக்கப்படவில்லை",
+  paymentAmountMismatch: "செலுத்திய தொகை ஆர்டருடன் பொருந்தவில்லை",
+  alreadyUnlimited: "இந்த திட்டத்தில் ஏற்கனவே வரம்பற்ற சுயவிவரங்கள் உள்ளன",
+  profilesAdded: "சுயவிவரங்கள் வெற்றிகரமாக சேர்க்கப்பட்டன",
+  invalidWebhook: "தவறான webhook கோரிக்கை",
   internalServerError: "உள் சேவையக பிழை",
 };
 

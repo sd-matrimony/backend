@@ -16,7 +16,8 @@ import { Payment, User, Admin, UserAccess } from "../models/index.js";
 import { getFilterObj } from "../utils/user-filter-obj.js";
 import { hashPassword } from "../utils/password.js";
 import { t, tf } from "../utils/i18n.js";
-import { onPaid } from "./payment.js";
+import { onPaid, syncUnlockExpiry } from "./payment.js";
+import { getPlanPricing } from "../utils/plan-pricing.js";
 
 const planSelectFields = "_id amount subscribedTo expiryDate noOfProfilesCanView isAssisted assistedMonths createdAt"
 const userSelectFields = "_id fullName email profileImg dob contactDetails.mobile otherDetails.caste otherDetails.subCaste proffessionalDetails.salary"
@@ -491,6 +492,7 @@ export async function extendUserPlan(c: zContext<{ param: typeof _idParamSchema,
   const base = payment.expiryDate && payment.expiryDate > now ? payment.expiryDate : now
   payment.expiryDate = new Date(base.getTime() + days * 24 * 60 * 60 * 1000)
   await payment.save()
+  await syncUnlockExpiry(_id, payment.expiryDate)
 
   await redisClient.del(`user:${_id}`)
 
@@ -737,8 +739,11 @@ export async function getUserUnlockedProfiles(c: zContext<{ param: typeof _idPar
 export async function makePaymentForUser(c: zContext<{ json: typeof mkePaymentSchema }>) {
   const { _id, ...body } = c.req.valid("json")
 
-  const res = await onPaid({ _id, role: "user" }, { ...body, orderId: `by-admin-${Date.now()}` })
-  return c.json(res)
+  const pricing = getPlanPricing(body)
+  if (!pricing.ok) return c.json({ message: t(c, pricing.error) }, 400)
+
+  const payment = await onPaid({ _id, role: "user" }, { ...body, assistedMonths: pricing.assistedMonths, orderId: `by-admin-${Date.now()}` })
+  return c.json({ subscribedTo: payment.subscribedTo, expiryDate: payment.expiryDate })
 }
 
 function flattenForSet(obj: any, prefix = ""): Record<string, any> {

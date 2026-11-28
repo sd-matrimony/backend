@@ -9,13 +9,7 @@ export const createOrderSchema = z.object({
 })
 
 export const verifyPaymentSchema = z.object({
-  amount: z.number("Amount is required"),
-  subscribedTo: planEnum,
-  noOfProfilesCanView: z.number("Number of profiles is required"),
-  isAssisted: z.boolean("Is assisted is required"),
-  assistedMonths: z.number("Assisted months is required"),
   merchantOrderId: z.string("Merchant Order ID is required"),
-  orderId: z.string("Order ID is required"),
 })
 
 export const testCreateOrderSchema = z.object({

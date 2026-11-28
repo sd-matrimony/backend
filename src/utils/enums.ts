@@ -23,6 +23,8 @@ export const env = {
 
   PHONE_PAY_CLIENT_ID: process.env.PHONE_PAY_CLIENT_ID || "",
   PHONE_PAY_SECRET: process.env.PHONE_PAY_SECRET || "",
+  PHONE_PAY_WEBHOOK_USERNAME: process.env.PHONE_PAY_WEBHOOK_USERNAME || "",
+  PHONE_PAY_WEBHOOK_PASSWORD: process.env.PHONE_PAY_WEBHOOK_PASSWORD || "",
 
 } as const
 

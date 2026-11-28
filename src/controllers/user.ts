@@ -31,7 +31,6 @@ async function checkUserAccess(user: any, _id: string) {
   const hasUnlockedAccess = await UserAccess.findOne({
     viewer: user._id,
     viewed: _id,
-    payment: user.currentPlan._id,
   }).select("_id").lean()
 
   return !!hasUnlockedAccess
@@ -200,7 +199,7 @@ export const getUnlockedProfiles = async (c: Context<Env>) => {
 
   if (!currentPlan) return c.json([])
 
-  const list = await UserAccess.find({ viewer: _id, payment: currentPlan._id })
+  const list = await UserAccess.find({ viewer: _id })
     .select("viewed")
     .populate({
       path: "viewed",
@@ -213,8 +212,18 @@ export const getUnlockedProfiles = async (c: Context<Env>) => {
     .sort({ createdAt: -1 })
     .lean()
 
+  const seen = new Set<string>()
+  const profiles = list
+    .map(item => item.viewed)
+    .filter(profile => {
+      const key = String((profile as { _id?: unknown } | null)?._id ?? "")
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
   const me = await User.findById(_id).select("hidden").lean()
-  const payload = withHiddenFlag(list.map((item) => item.viewed), me?.hidden || [])
+  const payload = withHiddenFlag(profiles, me?.hidden || [])
 
   return c.json(payload)
 }
