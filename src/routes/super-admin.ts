@@ -7,7 +7,7 @@ import {
   updateAdmin, getUsersInvitations, updateInvited, resetPass,
   makePaymentForUser, bulkUpdateUsers, getUserCurrentPlan, removeUserPlan,
   updateUserCritical, getDashboardStats, getActiveUsers, getUserUnlockedProfiles,
-  extendUserPlan,
+  extendUserPlan, getPaymentUsers, getUserPayments, deleteUserPayment,
 } from "../controllers/super-admin.js";
 
 import {
@@ -16,6 +16,7 @@ import {
   usersGroupedListSchema, findUsersSchema, resetPassByAdminSchema,
   mkePaymentSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
   activeUsersSchema, paidUsersSchema, dashboardStatsSchema, extendPlanSchema,
+  paymentUsersSchema, unlockedProfilesQuerySchema,
 } from "../validations/index.js";
 
 import roleCheck from "../middlewares/role-check.js";
@@ -37,8 +38,11 @@ superAdminRoutes
   .get("/users/grouped/list", zv("query", usersGroupedListSchema), getUsersGroupedList)
   .get("/users/invitations", zv("query", findUsersSchema), getUsersInvitations)
   .get("/user/:_id/plan", zv("param", _idParamSchema), getUserCurrentPlan)
-  .get("/user/:_id/unlocked", zv("param", _idParamSchema), getUserUnlockedProfiles)
+  .get("/payments/users", zv("query", paymentUsersSchema), getPaymentUsers)
+  .get("/user/:_id/payments", zv("param", _idParamSchema), getUserPayments)
+  .get("/user/:_id/unlocked", zv("param", _idParamSchema), zv("query", unlockedProfilesQuerySchema), getUserUnlockedProfiles)
   .delete("/user/:_id/plan", zv("param", _idParamSchema), removeUserPlan)
+  .delete("/payment/:_id", zv("param", _idParamSchema), deleteUserPayment)
   .get("/admins", getAdmins)
   .post("/admin", zv("json", adminCreateSchema), createAdmin)
   .post("/user/payment", zv("json", mkePaymentSchema), makePaymentForUser)

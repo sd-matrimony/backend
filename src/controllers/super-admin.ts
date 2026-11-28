@@ -1,10 +1,12 @@
 import type { Context } from "hono";
+import { Types, isValidObjectId } from "mongoose";
 
 import type {
   skipLimitSchema, adminCreateSchema, adminUpdateSchema, usersCreatedBySchema, _idParamSchema,
   usersGroupedCountSchema, usersGroupedByAdminCountSchema, usersGroupedListSchema, findUsersSchema,
   resetPassByAdminSchema, mkePaymentSchema, extendPlanSchema, bulkUpdateUsersSchema, updateUserCriticalSchema,
   activeUsersSchema, paidUsersSchema, dashboardStatsSchema,
+  paymentUsersSchema, unlockedProfilesQuerySchema,
 } from "../validations/index.js";
 import type { zContext } from "../types/index.js";
 
@@ -469,6 +471,7 @@ export async function removeUserPlan(c: zContext<{ param: typeof _idParamSchema 
   const { _id } = c.req.valid("param")
 
   await User.updateOne({ _id }, { $unset: { currentPlan: 1 } })
+  await redisClient.del(`user:${_id}`)
 
   return c.json({ message: t(c, "subscriptionRemoved") })
 }
@@ -492,6 +495,128 @@ export async function extendUserPlan(c: zContext<{ param: typeof _idParamSchema,
   await redisClient.del(`user:${_id}`)
 
   return c.json({ expiryDate: payment.expiryDate })
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+export async function getPaymentUsers(c: zContext<{ query: typeof paymentUsersSchema }>) {
+  const { skip, limit, search, status } = c.req.valid("query")
+  const now = new Date()
+
+  const match: Record<string, unknown> = {}
+  if (search) {
+    const regex = new RegExp(escapeRegex(search), "i")
+    match.$or = [
+      { "user.fullName": regex },
+      { "user.email": regex },
+      { "user.contactDetails.mobile": regex },
+    ]
+  }
+  if (status === "active") match["currentPlan.expiryDate"] = { $gt: now }
+  if (status === "expired") match.$nor = [{ "currentPlan.expiryDate": { $gt: now } }]
+
+  const users = await Payment.aggregate([
+    {
+      $group: {
+        _id: "$user",
+        paymentsCount: { $sum: 1 },
+        totalAmount: { $sum: "$amount" },
+        lastPaidAt: { $max: "$createdAt" },
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "_id",
+        foreignField: "_id",
+        as: "user",
+        pipeline: [{ $project: { fullName: 1, email: 1, profileImg: 1, "contactDetails.mobile": 1, currentPlan: 1 } }],
+      },
+    },
+    { $unwind: "$user" },
+    {
+      $lookup: {
+        from: "payments",
+        localField: "user.currentPlan",
+        foreignField: "_id",
+        as: "currentPlan",
+        pipeline: [{ $project: { subscribedTo: 1, expiryDate: 1, noOfProfilesCanView: 1 } }],
+      },
+    },
+    { $unwind: { path: "$currentPlan", preserveNullAndEmptyArrays: true } },
+    { $match: match },
+    { $sort: { lastPaidAt: -1, _id: -1 } },
+    { $skip: skip },
+    { $limit: limit },
+    { $project: { "user.currentPlan": 0 } },
+  ])
+
+  return c.json(users)
+}
+
+export async function getUserPayments(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+  if (!isValidObjectId(_id)) return c.json({ message: t(c, "userNotFound") }, 404)
+
+  const user = await User.findById(_id)
+    .select("_id fullName email profileImg contactDetails.mobile currentPlan")
+    .lean()
+  if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
+
+  const [payments, unlockCounts] = await Promise.all([
+    Payment.find({ user: _id })
+      .select(`${planSelectFields} orderId`)
+      .sort({ createdAt: -1, _id: -1 })
+      .lean(),
+    UserAccess.aggregate<{ _id: Types.ObjectId, count: number }>([
+      { $match: { viewer: new Types.ObjectId(_id) } },
+      { $group: { _id: "$payment", count: { $sum: 1 } } },
+    ]),
+  ])
+
+  const countByPayment = new Map(unlockCounts.map(item => [String(item._id), item.count]))
+  const currentPlanId = user.currentPlan ? String(user.currentPlan) : null
+
+  return c.json({
+    user,
+    payments: payments.map(payment => ({
+      ...payment,
+      isCurrent: String(payment._id) === currentPlanId,
+      unlockedCount: countByPayment.get(String(payment._id)) ?? 0,
+    })),
+  })
+}
+
+export async function deleteUserPayment(c: zContext<{ param: typeof _idParamSchema }>) {
+  const { _id } = c.req.valid("param")
+  if (!isValidObjectId(_id)) return c.json({ message: t(c, "paymentNotFound") }, 404)
+
+  const payment = await Payment.findById(_id).select("_id user").lean()
+  if (!payment) return c.json({ message: t(c, "paymentNotFound") }, 404)
+
+  await Promise.all([
+    UserAccess.deleteMany({ payment: _id }),
+    Payment.deleteOne({ _id }),
+  ])
+
+  const user = await User.findById(payment.user).select("currentPlan").lean()
+  if (user && String(user.currentPlan) === String(_id)) {
+    const fallback = await Payment.findOne({ user: payment.user, expiryDate: { $gt: new Date() } })
+      .select("_id")
+      .sort({ expiryDate: -1 })
+      .lean()
+
+    await User.updateOne(
+      { _id: payment.user },
+      fallback ? { $set: { currentPlan: fallback._id } } : { $unset: { currentPlan: 1 } },
+    )
+  }
+
+  if (payment.user) await redisClient.del(`user:${payment.user}`)
+
+  return c.json({ message: t(c, "paymentDeleted") })
 }
 
 export async function updateInvited(c: zContext<{ param: typeof _idParamSchema }>) {
@@ -576,8 +701,9 @@ export async function getUserCurrentPlan(c: zContext<{ param: typeof _idParamSch
   return c.json((user as any).currentPlan ?? null)
 }
 
-export async function getUserUnlockedProfiles(c: zContext<{ param: typeof _idParamSchema }>) {
+export async function getUserUnlockedProfiles(c: zContext<{ param: typeof _idParamSchema, query: typeof unlockedProfilesQuerySchema }>) {
   const { _id } = c.req.valid("param")
+  const { payment } = c.req.valid("query") || {}
 
   const user = await User.findById(_id)
     .select("currentPlan")
@@ -585,7 +711,14 @@ export async function getUserUnlockedProfiles(c: zContext<{ param: typeof _idPar
     .lean()
   if (!user) return c.json({ message: t(c, "userNotFound") }, 404)
 
-  const plan = (user as any).currentPlan
+  let plan = (user as any).currentPlan
+  if (payment) {
+    if (!isValidObjectId(payment)) return c.json({ message: t(c, "paymentNotFound") }, 404)
+    plan = await Payment.findOne({ _id: payment, user: _id })
+      .select("_id subscribedTo expiryDate noOfProfilesCanView")
+      .lean()
+    if (!plan) return c.json({ message: t(c, "paymentNotFound") }, 404)
+  }
   if (!plan) return c.json({ plan: null, used: 0, profiles: [] })
 
   const list = await UserAccess.find({ viewer: _id, payment: plan._id })

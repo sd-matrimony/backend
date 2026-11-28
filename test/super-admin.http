@@ -167,3 +167,23 @@ Content-Type: application/json
 {
   "days": 15
 }
+
+
+### users with payments
+GET {{host}}/payments/users?search=&status=all&skip=0&limit=50
+Authorization: {{token}}
+
+
+### payments of a user
+GET {{host}}/user/68942a49660c9ca1bf10293c/payments
+Authorization: {{token}}
+
+
+### unlocked profiles for a payment
+GET {{host}}/user/68942a49660c9ca1bf10293c/unlocked?payment=68942a49660c9ca1bf10293d
+Authorization: {{token}}
+
+
+### delete payment
+DELETE {{host}}/payment/68942a49660c9ca1bf10293d
+Authorization: {{token}}

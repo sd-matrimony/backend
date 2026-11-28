@@ -91,3 +91,14 @@ export const mkePaymentSchema = z.object({
 export const extendPlanSchema = z.object({
   days: z.number("Days is required").int("Days must be a whole number").min(1, "Days must be at least 1").max(365, "Days must be at most 365"),
 })
+
+export const paymentUsersSchema = z.object({
+  skip: z.coerce.number().optional().default(0),
+  limit: z.coerce.number().optional().default(50),
+  search: z.string().trim().optional(),
+  status: z.enum(["all", "active", "expired"]).optional().default("all"),
+})
+
+export const unlockedProfilesQuerySchema = z.object({
+  payment: z.string().optional(),
+}).optional()
